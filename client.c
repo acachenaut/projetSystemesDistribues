@@ -29,6 +29,7 @@ int sock;
     }
         return sock;
 }
+
 int creerSocketUDP(int port){
     return (creerSocket(port, SOCK_DGRAM));
 }
