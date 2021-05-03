@@ -33,8 +33,9 @@ int creerSocketTCP(int port){
     return (creerSocket(port, SOCK_STREAM));
 }
 
-char* connexion_tcp(){
-    return "bien reçu";
+char* connexion_tcp(int pseudo){
+    printf("Affichage pseudo : %d \n",pseudo );
+    return "bien recu";
 }
 
 void gererClient(int sock_client){
@@ -44,18 +45,21 @@ void gererClient(int sock_client){
     while(1) {
         nb_octets = read(sock_client, &req, sizeof(struct requete));
         if (nb_octets <= 0){
-            perror(" reception donnees");
+            perror("reception donnees");
+            break;
         }
         if (req.type_requete==CONNEXION_TCP){
-            char pseudo[TAILLEBUF];
+            int pseudo;
             char* res;
-            nb_octets = read(sock_client, &pseudo, sizeof(pseudo));
+            nb_octets = read(sock_client, &pseudo, sizeof(int));
             if (nb_octets <= 0){
-                perror(" reception donnees");
+                perror("reception donnees");
+                break;
             }
-            res = connexion_tcp();
-            if( write(sock_client, (char *)&res, sizeof(res)) <= 0){
+            res = connexion_tcp(pseudo);
+            if( write(sock_client, (char *)res, strlen(res)+1) <= 0){
                 perror(" envoi reponse\n");
+                break;
             }
         }
     }

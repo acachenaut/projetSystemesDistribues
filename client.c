@@ -47,21 +47,19 @@ int connexion_serveur(char* argv[]){
 char* connexion_tcp(int pseudo){
     struct requete req;
     char *message;
-    char pseudoChar[20];
-    char* reponse = malloc(sizeof(char)* TAILLEBUF);
     int taille_msg;
-    sprintf(pseudoChar, "%d", pseudo);
+    char* reponse = malloc(sizeof(char)* TAILLEBUF);
     req.type_requete = CONNEXION_TCP;
-    req.taille_requete = sizeof(pseudoChar);
-    taille_msg = sizeof(struct requete) + 20;
+    req.taille_requete = sizeof(int);
+    taille_msg = sizeof(struct requete) + sizeof(int);
     message = (char *) malloc(taille_msg);
     memcpy(message, &req, sizeof(struct requete));
-    memcpy(message+sizeof(struct requete), &pseudoChar, 20);
+    memcpy(message+sizeof(struct requete), &pseudo, sizeof(int));
     if (write(sock, message, taille_msg) <= 0){
         free(message);
         return NULL;
     }
-    if (read(sock, (char *)&reponse, sizeof(reponse)) <= 0){
+    if (read(sock, (char *)reponse, TAILLEBUF) <= 0){
         free(message);
         return NULL;
     }
@@ -71,7 +69,7 @@ char* connexion_tcp(int pseudo){
 
 int main(int argc, char* argv[]){
     int port;
-    char* reponse;
+    char *reponse;
     port = atoi(argv[2]);
     if (creerSocketTCP(port) == -1){
       perror("creation socket");
@@ -83,7 +81,7 @@ int main(int argc, char* argv[]){
     }
     reponse = connexion_tcp(getpid());
     if (reponse == NULL){
-        perror("Connexion TCP");
+        perror("Erreur réception");
     }
     else{
         printf(" reponse recue : %s\n", reponse);

@@ -14,4 +14,4 @@ commissaire: serveur.c
 	$(CC) $(CFLAGS) -o $@ $^
 
 clean:
-	$(RM) *.o *.out
+	$(RM) *.o *.out commissaire client
