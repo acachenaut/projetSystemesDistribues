@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <string.h>
 #include <stdbool.h>
+#include <assert.h>
 
 #define TAILLEBUF 20
 #define TAILLEDESCVENTE 300
@@ -119,8 +120,8 @@ int requete_vente(char description[300], int prix){
   req.type_requete = REQUETE_VENTE;
   req.taille_requete = 300 + sizeof(int);
   memcpy(message, &req, sizeof(struct requete));
-  memcpy(message+sizeof(struct requete), description, 300);
-  memcpy(message+sizeof(struct requete)+300, &prix, sizeof(int));
+  memcpy(message + sizeof(struct requete), description, 300);
+  memcpy(message + sizeof(struct requete) + 300, &prix, sizeof(int));
   if (write(sockTCP, message, taille_msg) <= 0){
     return -1;
   }
@@ -182,9 +183,12 @@ int main(int argc, char* argv[]){
     }
     scanf("%d", &choix);
     switch (choix) {
+      case 0:
+        close(sockTCP);
+        break;
       case 1:
         printf("Veuillez saisir la description de votre bien : \n");
-        scanf("%s", descriptionBien);
+        scanf("%s",descriptionBien);
         printf("Veuillez saisir le prix de votre bien en € : \n");
         scanf("%d", &prixBien);
         if(requete_vente(descriptionBien, prixBien) == -1){

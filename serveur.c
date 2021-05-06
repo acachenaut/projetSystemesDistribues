@@ -94,10 +94,10 @@ char* connexion_tcp(int pseudo){
 void gererClient(int sock_client){
   struct requete req;
   int nb_octets;
-  /*char message[sizeof(struct requete) + 300 + sizeof(int)];*/
+  char message[sizeof(struct requete) + 300 + sizeof(int)];
   char reponseUDP[TAILLEBUF];
   char description[300];
-  int pseudo, prix, reponseReqVente/*, taille_msg*/;
+  int pseudo, prix, reponseReqVente, taille_msg;
   char* res;
   printf(" *** nouveau client connecte ***\n");
   while(1) {
@@ -135,17 +135,17 @@ void gererClient(int sock_client){
             perror(" envoi reponse\n");
             break;
         }
-        printf("%s, %d", description, prix);
-        /*taille_msg = sizeof(struct requete) + 300 + sizeof(int);
+        printf("%s , %d\n", description, prix);
+        taille_msg = sizeof(struct requete) + 300 + sizeof(int);
         req.type_requete = NOUVELLE_VENTE;
         req.taille_requete = 300 + sizeof(int);
         memcpy(message, &req, sizeof(struct requete));
         memcpy(message+sizeof(struct requete), description, 300);
         memcpy(message+sizeof(struct requete)+300, &prix, sizeof(int));
-        sendto(sockUDP, message, taille_msg , 0, (struct sockaddr*)&adresseUDP, longueur_adresse);*/
+        sendto(sockUDP, message, taille_msg , 0, (struct sockaddr*)&adresseUDP, longueur_adresse);
         break;
       default:
-      break;
+        break;
     }
   }
   printf(" *** sortie de la boucle ***\n");
