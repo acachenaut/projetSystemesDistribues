@@ -4,14 +4,18 @@
 enum requete_t {
     FIN = 0,
     CONNEXION_TCP,
-    CONNEXION_UDP,
-    DEMANDE_VENTE,
-    VENTE
+    REQUETE_VENTE,
+    VENTE,
+    CONNEXION_UDP
 };
 
 struct requete {
     enum requete_t type_requete;
     int taille_requete;
 };
+
+char *connexion_tcp(int pseudo);
+
+int requete_vente(char *description, int prix);
 
 #endif
