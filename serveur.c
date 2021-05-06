@@ -94,11 +94,10 @@ char* connexion_tcp(int pseudo){
 void gererClient(int sock_client){
   struct requete req;
   int nb_octets;
-  char * message = "test";
+  /*char message[sizeof(struct requete) + 300 + sizeof(int)];*/
   char reponseUDP[TAILLEBUF];
   char description[300];
-  char reponseDesc[300];
-  int pseudo, prix, reponseReqVente;
+  int pseudo, prix, reponseReqVente/*, taille_msg*/;
   char* res;
   printf(" *** nouveau client connecte ***\n");
   while(1) {
@@ -137,14 +136,19 @@ void gererClient(int sock_client){
             break;
         }
         printf("%s, %d", description, prix);
-        sendto(sockUDP, description, strlen(message)+1 , 0, (struct sockaddr*)&adresseUDP, longueur_adresse);
+        /*taille_msg = sizeof(struct requete) + 300 + sizeof(int);
+        req.type_requete = NOUVELLE_VENTE;
+        req.taille_requete = 300 + sizeof(int);
+        memcpy(message, &req, sizeof(struct requete));
+        memcpy(message+sizeof(struct requete), description, 300);
+        memcpy(message+sizeof(struct requete)+300, &prix, sizeof(int));
+        sendto(sockUDP, message, taille_msg , 0, (struct sockaddr*)&adresseUDP, longueur_adresse);*/
         break;
       default:
       break;
     }
   }
   printf(" *** sortie de la boucle ***\n");
-  sendto(sockUDP, message, strlen(message)+1 , 0, (struct sockaddr*)&adresseUDP, longueur_adresse);
   while(1){
     printf("Lu : ");
     recv(sockUDP, (char*)reponseUDP, TAILLEBUF, 0);

@@ -127,6 +127,7 @@ int requete_vente(char description[300], int prix){
   if (read(sockTCP, &reponse, sizeof(int)) <= 0){
     return -1;
   }
+  printf("%d\n", reponse);
   return reponse;
 }
 
@@ -140,6 +141,7 @@ int main(int argc, char* argv[]){
   char * adresseIP = "";
   char descriptionBien[TAILLEDESCVENTE];
   bool venteEnCours;
+  /*struct requete req;*/
   port = atoi(argv[2]);
   if ((sockTCP = creerSocketTCP()) == -1){
     perror("creation socket tcp");
@@ -189,6 +191,15 @@ int main(int argc, char* argv[]){
             printf("Erreur demande de vente\n");
             return 1;
         }
+        /*recv(sockUDP, &req, sizeof(struct requete), 0);
+        switch (req.type_requete){
+            case NOUVELLE_VENTE:
+                venteEnCours=1;
+                recv(sockUDP, descriptionBien, 300, 0);
+                printf("%s", descriptionBien);
+            default:
+                break;
+        }*/
         break;
       case 2:
         break;

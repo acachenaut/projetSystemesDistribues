@@ -5,7 +5,8 @@ enum requete_t {
     FIN = 0,
     CONNEXION_TCP,
     REQUETE_VENTE,
-    VENTE,
+    NOUVELLE_VENTE,
+    SURENCHERE,
     CONNEXION_UDP
 };
 
