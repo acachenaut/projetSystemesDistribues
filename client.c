@@ -110,27 +110,23 @@ char *connexion_tcp(int pseudo){
   return reponse;
 }
 
-int requete_vente(char *description, int prix){
+int requete_vente(char description[300], int prix){
   struct requete req;
-  char *message;
+  char message[sizeof(struct requete) + 300 + sizeof(int)];
   int taille_msg;
   int reponse;
+  taille_msg = sizeof(struct requete) + 300 + sizeof(int);
   req.type_requete = REQUETE_VENTE;
-  req.taille_requete = strlen(description) + sizeof(int);
-  taille_msg = sizeof(struct requete) + strlen(description) + sizeof(int);
-  message = (char *) malloc(taille_msg);
+  req.taille_requete = 300 + sizeof(int);
   memcpy(message, &req, sizeof(struct requete));
-  memcpy(message+sizeof(struct requete), description, strlen(description));
-  memcpy(message+sizeof(struct requete)+strlen(description), &prix, sizeof(int));
+  memcpy(message+sizeof(struct requete), description, 300);
+  memcpy(message+sizeof(struct requete)+300, &prix, sizeof(int));
   if (write(sockTCP, message, taille_msg) <= 0){
-    free(message);
     return -1;
   }
   if (read(sockTCP, &reponse, sizeof(int)) <= 0){
-    free(message);
     return -1;
   }
-  free(message);
   return reponse;
 }
 
@@ -165,7 +161,6 @@ int main(int argc, char* argv[]){
     }
     portUDP=atoi((adresseIP+strlen(adresseIP)+1));
   }
-  close(sockTCP);
   if ((sockUDP = creerSocketUDPMulticast()) == -1){
     perror("creation socket udp");
     return 1;
@@ -190,9 +185,14 @@ int main(int argc, char* argv[]){
         scanf("%s", descriptionBien);
         printf("Veuillez saisir le prix de votre bien en € : \n");
         scanf("%d", &prixBien);
-        requete_vente(descriptionBien, prixBien);
+        if(requete_vente(descriptionBien, prixBien) == -1){
+            printf("Erreur demande de vente\n");
+            return 1;
+        }
         break;
       case 2:
+        break;
+      default:
         break;
     }
   }

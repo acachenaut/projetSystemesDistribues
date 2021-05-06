@@ -96,20 +96,22 @@ void gererClient(int sock_client){
   int nb_octets;
   char * message = "test";
   char reponseUDP[TAILLEBUF];
-  int pseudo;
+  char description[300];
+  char reponseDesc[300];
+  int pseudo, prix, reponseReqVente;
   char* res;
   printf(" *** nouveau client connecte ***\n");
   while(1) {
     nb_octets = read(sock_client, &req, sizeof(struct requete));
     if (nb_octets <= 0){
-      perror("reception donnees");
+      perror("reception donnees requête");
       break;
     }
     switch (req.type_requete) {
       case CONNEXION_TCP:
         nb_octets = read(sock_client, &pseudo, sizeof(int));
         if (nb_octets <= 0){
-          perror("reception donnees");
+          perror("reception donnees pseudo");
           break;
         }
         res = connexion_tcp(pseudo);
@@ -119,7 +121,23 @@ void gererClient(int sock_client){
         }
         break;
       case REQUETE_VENTE:
-
+        reponseReqVente = 0;
+        nb_octets = read(sock_client, description, sizeof(description));
+        if (nb_octets <= 0){
+            perror("reception donnees description");
+            break;
+        }
+        nb_octets = read(sock_client, &prix, sizeof(int));
+        if (nb_octets <= 0){
+            perror("reception donnees description");
+            break;
+        }
+        if( write(sock_client, &reponseReqVente, sizeof(int)) <= 0){
+            perror(" envoi reponse\n");
+            break;
+        }
+        printf("%s, %d", description, prix);
+        sendto(sockUDP, description, strlen(message)+1 , 0, (struct sockaddr*)&adresseUDP, longueur_adresse);
         break;
       default:
       break;
