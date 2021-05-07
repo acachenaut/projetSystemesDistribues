@@ -111,38 +111,40 @@ char *connexion_tcp(int pseudo){
   return reponse;
 }
 
-int requete_vente(char description[300], int prix){
+int requete_vente(char *description, int prix){
   struct requete req;
-  char message[sizeof(struct requete) + 300 + sizeof(int)];
+  char *message;
   int taille_msg;
   int reponse;
-  taille_msg = sizeof(struct requete) + 300 + sizeof(int);
+  taille_msg = sizeof(struct requete) + strlen(description) + sizeof(int);
+  message = (char *) malloc(taille_msg);
   req.type_requete = REQUETE_VENTE;
-  req.taille_requete = 300 + sizeof(int);
+  req.taille_requete = strlen(description) + sizeof(int);
   memcpy(message, &req, sizeof(struct requete));
-  memcpy(message + sizeof(struct requete), description, 300);
-  memcpy(message + sizeof(struct requete) + 300, &prix, sizeof(int));
+  memcpy(message + sizeof(struct requete), description, strlen(description));
+  memcpy(message + sizeof(struct requete) + strlen(description), &prix, sizeof(int));
   if (write(sockTCP, message, taille_msg) <= 0){
     return -1;
   }
   if (read(sockTCP, &reponse, sizeof(int)) <= 0){
     return -1;
   }
-  printf("%d\n", reponse);
   return reponse;
 }
 
 
 
 int main(int argc, char* argv[]){
-  int port, portUDP, choix, prixBien;
+  int port, portUDP, choix, prixBien, pid;
   char * message = "test";
   char *reponse;
   char reponseUDP[TAILLEBUF];
   char * adresseIP = "";
   char descriptionBien[TAILLEDESCVENTE];
   bool venteEnCours;
-  /*struct requete req;*/
+  char description [sizeof(struct requete)+300+sizeof(int)];
+  struct requete req;
+  struct requete_vente reqVente;
   port = atoi(argv[2]);
   if ((sockTCP = creerSocketTCP()) == -1){
     perror("creation socket tcp");
@@ -172,48 +174,60 @@ int main(int argc, char* argv[]){
     perror("erreur connexion multicast");
     return 1;
   }
-  choix = -1;
-  venteEnCours = 0;
-  while(choix != 0){
-    choix = -1;
-    printf("0 - Quitter la vente aux encheres\n");
-    printf("1 - Proposer une vente\n");
-    if (venteEnCours){
-      printf("2 - Faire une offre\n");
-    }
-    scanf("%d", &choix);
-    switch (choix) {
-      case 0:
-        close(sockTCP);
-        break;
-      case 1:
-        printf("Veuillez saisir la description de votre bien : \n");
-        scanf("%s",descriptionBien);
-        printf("Veuillez saisir le prix de votre bien en € : \n");
-        scanf("%d", &prixBien);
-        if(requete_vente(descriptionBien, prixBien) == -1){
-            printf("Erreur demande de vente\n");
-            return 1;
+  pid = fork();
+  switch(pid) {
+    case -1 :
+      perror("Impossible de creer le processus fils\n");
+      return 1;
+      break;
+    case 0 :
+      while(1){
+        recv(sockUDP, &reqVente, sizeof(struct requete_vente), 0);
+        switch (reqVente.requete.type_requete) {
+          case NOUVELLE_VENTE:
+            printf("Nouvelle vente : %s , %d\n", reqVente.description, reqVente.prix);
+            break;
+          default:
+              break;
+          }
+      }
+      break;
+    default :
+      choix = -1;
+      venteEnCours = 0;
+      while(choix != 0){
+        choix = -1;
+        printf("0 - Quitter la vente aux encheres\n");
+        printf("1 - Proposer une vente\n");
+        if (venteEnCours){
+          printf("2 - Faire une offre\n");
         }
-        /*recv(sockUDP, &req, sizeof(struct requete), 0);
-        switch (req.type_requete){
-            case NOUVELLE_VENTE:
-                venteEnCours=1;
-                recv(sockUDP, descriptionBien, 300, 0);
-                printf("%s", descriptionBien);
-            default:
-                break;
-        }*/
-        break;
-      case 2:
-        break;
-      default:
-        break;
+        scanf("%d", &choix);
+        switch (choix) {
+          case 0:
+            close(sockTCP);
+            break;
+          case 1:
+            printf("Veuillez saisir la description de votre bien : \n");
+            scanf("%s",descriptionBien);
+            printf("Veuillez saisir le prix de votre bien en € : \n");
+            scanf("%d", &prixBien);
+            if(requete_vente(descriptionBien, prixBien) == -1){
+              printf("Erreur demande de vente\n");
+              return 1;
+            }
+          break;
+        case 2:
+          break;
+        default:
+          break;
+      }
     }
+    sendto(sockUDP, message, strlen(message)+1 , 0, (struct sockaddr*)&adresseUDP, longueur_adresse);
+    recv(sockUDP, (char*)reponseUDP, TAILLEBUF, 0);
+    printf("%s\n", reponseUDP );
+    close(sockUDP);
+    break;
   }
-  sendto(sockUDP, message, strlen(message)+1 , 0, (struct sockaddr*)&adresseUDP, longueur_adresse);
-  recv(sockUDP, (char*)reponseUDP, TAILLEBUF, 0);
-  printf("%s\n", reponseUDP );
-  close(sockUDP);
   return 0;
 }

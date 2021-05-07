@@ -93,8 +93,9 @@ char* connexion_tcp(int pseudo){
 
 void gererClient(int sock_client){
   struct requete req;
+  struct requete_vente reqVente;
   int nb_octets;
-  char message[sizeof(struct requete) + 300 + sizeof(int)];
+  char *message;
   char reponseUDP[TAILLEBUF];
   char description[300];
   int pseudo, prix, reponseReqVente, taille_msg;
@@ -115,13 +116,13 @@ void gererClient(int sock_client){
         }
         res = connexion_tcp(pseudo);
         if( write(sock_client, (char *)res, strlen(res)) <= 0){
-          perror(" envoi reponse\n");
+          perror("envoi reponse\n");
           break;
         }
         break;
       case REQUETE_VENTE:
         reponseReqVente = 0;
-        nb_octets = read(sock_client, description, sizeof(description));
+        nb_octets = read(sock_client, description, req.taille_requete-sizeof(int));
         if (nb_octets <= 0){
             perror("reception donnees description");
             break;
@@ -136,13 +137,16 @@ void gererClient(int sock_client){
             break;
         }
         printf("%s , %d\n", description, prix);
-        taille_msg = sizeof(struct requete) + 300 + sizeof(int);
         req.type_requete = NOUVELLE_VENTE;
         req.taille_requete = 300 + sizeof(int);
-        memcpy(message, &req, sizeof(struct requete));
-        memcpy(message+sizeof(struct requete), description, 300);
-        memcpy(message+sizeof(struct requete)+300, &prix, sizeof(int));
+        reqVente.requete = req;
+        strcpy(reqVente.description, description);
+        reqVente.prix = prix;
+        taille_msg = sizeof(struct requete_vente);
+        message = (char *) malloc(sizeof(struct requete_vente));
+        memcpy(message, &reqVente, sizeof(struct requete_vente));
         sendto(sockUDP, message, taille_msg , 0, (struct sockaddr*)&adresseUDP, longueur_adresse);
+        printf("Fin envoie\n");
         break;
       default:
         break;

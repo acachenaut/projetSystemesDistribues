@@ -15,6 +15,12 @@ struct requete {
     int taille_requete;
 };
 
+struct requete_vente {
+    struct requete requete;
+    char description[300];
+    int prix;
+};
+
 char *connexion_tcp(int pseudo);
 
 int requete_vente(char *description, int prix);

@@ -1,5 +1,5 @@
 CC= gcc
-CFLAGS= -std=c89 -pedantic -Wall -Werror -g -D_GNU_SOURCE
+CFLAGS= -std=c89 -pedantic -Wall -g -D_GNU_SOURCE
 RM= rm -fv
 
 
