@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <signal.h>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -94,11 +95,10 @@ char *connexion_tcp(int pseudo){
   int taille_msg;
   char *reponse = malloc(sizeof(char)* TAILLEBUF);
   req.type_requete = CONNEXION_TCP;
-  req.taille_requete = sizeof(int);
-  taille_msg = sizeof(struct requete) + sizeof(int);
+  req.id = pseudo;
+  taille_msg = sizeof(struct requete);
   message = (char *) malloc(taille_msg);
   memcpy(message, &req, sizeof(struct requete));
-  memcpy(message+sizeof(struct requete), &pseudo, sizeof(int));
   if (write(sockTCP, message, taille_msg) <= 0){
     free(message);
     return NULL;
@@ -116,34 +116,40 @@ int requete_vente(char *description, int prix){
   char *message;
   int taille_msg;
   int reponse;
-  taille_msg = sizeof(struct requete) + strlen(description) + sizeof(int);
+  int pid;
+  pid = getpid();
+  taille_msg = sizeof(struct requete) + sizeof(int) + strlen(description) + sizeof(int);
   message = (char *) malloc(taille_msg);
   req.type_requete = REQUETE_VENTE;
+  req.id = pid;
   req.taille_requete = strlen(description) + sizeof(int);
   memcpy(message, &req, sizeof(struct requete));
   memcpy(message + sizeof(struct requete), description, strlen(description));
   memcpy(message + sizeof(struct requete) + strlen(description), &prix, sizeof(int));
   if (write(sockTCP, message, taille_msg) <= 0){
+    free(message);
     return -1;
   }
   if (read(sockTCP, &reponse, sizeof(int)) <= 0){
+    free(message);
     return -1;
   }
+  free(message);
   return reponse;
 }
 
 
 
 int main(int argc, char* argv[]){
-  int port, portUDP, choix, prixBien, pid;
+  int port, portUDP, choix, prixBien, pid, i;
   char * message = "test";
   char *reponse;
   char reponseUDP[TAILLEBUF];
   char * adresseIP = "";
   char descriptionBien[TAILLEDESCVENTE];
   bool venteEnCours;
-  char description [sizeof(struct requete)+300+sizeof(int)];
-  struct requete req;
+  char c;
+  char saisieTmp[TAILLEDESCVENTE];
   struct requete_vente reqVente;
   port = atoi(argv[2]);
   if ((sockTCP = creerSocketTCP()) == -1){
@@ -173,6 +179,7 @@ int main(int argc, char* argv[]){
   if (connexion_multicast(adresseIP, portUDP) == -1){
     perror("erreur connexion multicast");
     return 1;
+
   }
   pid = fork();
   switch(pid) {
@@ -183,9 +190,12 @@ int main(int argc, char* argv[]){
     case 0 :
       while(1){
         recv(sockUDP, &reqVente, sizeof(struct requete_vente), 0);
-        switch (reqVente.requete.type_requete) {
+        switch (reqVente.type_requete) {
           case NOUVELLE_VENTE:
-            printf("Nouvelle vente : %s , %d\n", reqVente.description, reqVente.prix);
+            printf("Nouvelle vente de %d : %s , %d\n", reqVente.id, reqVente.description, reqVente.prix);
+            for(i=0; i<300; i++){
+              reqVente.description[i]='\0';
+            }
             break;
           default:
               break;
@@ -206,15 +216,23 @@ int main(int argc, char* argv[]){
         switch (choix) {
           case 0:
             close(sockTCP);
+            close(sockUDP);
+            kill(pid, SIGKILL);
             break;
           case 1:
             printf("Veuillez saisir la description de votre bien : \n");
-            scanf("%s",descriptionBien);
+            while ((c = (char) getchar()) != EOF && c != '\t' && c != '\n' && c != ' ');
+            fgets(saisieTmp, TAILLEDESCVENTE, stdin);
+            saisieTmp[strlen(saisieTmp) - 1] = '\0';
+            strcat(descriptionBien, saisieTmp);
             printf("Veuillez saisir le prix de votre bien en € : \n");
             scanf("%d", &prixBien);
             if(requete_vente(descriptionBien, prixBien) == -1){
               printf("Erreur demande de vente\n");
               return 1;
+            }
+            for(i=0; i<300; i++){
+              descriptionBien[i]='\0';
             }
           break;
         case 2:

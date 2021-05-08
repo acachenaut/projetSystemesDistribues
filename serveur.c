@@ -1,5 +1,6 @@
 #include "requete.h"
 #include "multicastAddr.h"
+#include "listeVente.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -16,6 +17,7 @@
 
 int sockUDP, longueur_adresse;
 static struct sockaddr_in adresseUDP;
+struct *ListeVente listeVente;
 
 int creerSocket(int type){
   int sock;
@@ -98,7 +100,7 @@ void gererClient(int sock_client){
   char *message;
   char reponseUDP[TAILLEBUF];
   char description[300];
-  int pseudo, prix, reponseReqVente, taille_msg;
+  int prix, reponseReqVente, taille_msg, i;
   char* res;
   printf(" *** nouveau client connecte ***\n");
   while(1) {
@@ -109,12 +111,7 @@ void gererClient(int sock_client){
     }
     switch (req.type_requete) {
       case CONNEXION_TCP:
-        nb_octets = read(sock_client, &pseudo, sizeof(int));
-        if (nb_octets <= 0){
-          perror("reception donnees pseudo");
-          break;
-        }
-        res = connexion_tcp(pseudo);
+        res = connexion_tcp(req.id);
         if( write(sock_client, (char *)res, strlen(res)) <= 0){
           perror("envoi reponse\n");
           break;
@@ -136,17 +133,24 @@ void gererClient(int sock_client){
             perror(" envoi reponse\n");
             break;
         }
-        printf("%s , %d\n", description, prix);
-        req.type_requete = NOUVELLE_VENTE;
-        req.taille_requete = 300 + sizeof(int);
-        reqVente.requete = req;
+        printf("Nouvelle vente de %d : %s , %d\n", req.id, description, prix);
+        reqVente.type_requete = NOUVELLE_VENTE;
+        reqVente.id = req.id;
         strcpy(reqVente.description, description);
         reqVente.prix = prix;
-        taille_msg = sizeof(struct requete_vente);
-        message = (char *) malloc(sizeof(struct requete_vente));
-        memcpy(message, &reqVente, sizeof(struct requete_vente));
-        sendto(sockUDP, message, taille_msg , 0, (struct sockaddr*)&adresseUDP, longueur_adresse);
-        printf("Fin envoie\n");
+        insertion(listeVente, reqVente);
+        if (!venteEnCours(listeVente, reqVente)){
+          taille_msg = sizeof(struct requete_vente);
+          message = (char *) malloc(sizeof(struct requete_vente));
+          memcpy(message, &reqVente, sizeof(struct requete_vente));
+          sendto(sockUDP, message, taille_msg , 0, (struct sockaddr*)&adresseUDP, longueur_adresse);
+          free(message);
+          for(i = 0; i<300; i++){
+            description[i] = '\0';
+            reqVente.description[i]='\0';
+          }
+          printf("Fin envoie\n");
+        }
         break;
       default:
         break;
@@ -164,6 +168,7 @@ int main(int argc, char *argv[]){
   int socket_ecoute, socket_service;
   static struct sockaddr_in addr_client;
   int lg;
+  listeVente = initialisation();
   socket_ecoute = creerSocketTCP();
   if (socket_ecoute == -1){
     perror("creation socket service");

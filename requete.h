@@ -12,11 +12,13 @@ enum requete_t {
 
 struct requete {
     enum requete_t type_requete;
+    int id;
     int taille_requete;
 };
 
 struct requete_vente {
-    struct requete requete;
+    enum requete_t type_requete;
+    int id;
     char description[300];
     int prix;
 };
