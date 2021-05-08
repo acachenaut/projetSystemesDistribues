@@ -17,7 +17,7 @@
 
 int sockUDP, longueur_adresse;
 static struct sockaddr_in adresseUDP;
-struct *ListeVente listeVente;
+struct ListeVente *listeVente;
 
 int creerSocket(int type){
   int sock;
@@ -130,7 +130,7 @@ void gererClient(int sock_client){
             break;
         }
         if( write(sock_client, &reponseReqVente, sizeof(int)) <= 0){
-            perror(" envoi reponse\n");
+            perror("envoi reponse\n");
             break;
         }
         printf("Nouvelle vente de %d : %s , %d\n", req.id, description, prix);
@@ -138,18 +138,25 @@ void gererClient(int sock_client){
         reqVente.id = req.id;
         strcpy(reqVente.description, description);
         reqVente.prix = prix;
-        insertion(listeVente, reqVente);
-        if (!venteEnCours(listeVente, reqVente)){
+        if (insertion(listeVente, reqVente)) {
+          perror("insertion dans la liste");
+          break;
+        }
+        if (!venteEnCours(listeVente)){
+          printf("N'importe quoi\n");
           taille_msg = sizeof(struct requete_vente);
           message = (char *) malloc(sizeof(struct requete_vente));
           memcpy(message, &reqVente, sizeof(struct requete_vente));
           sendto(sockUDP, message, taille_msg , 0, (struct sockaddr*)&adresseUDP, longueur_adresse);
-          free(message);
-          for(i = 0; i<300; i++){
-            description[i] = '\0';
-            reqVente.description[i]='\0';
-          }
-          printf("Fin envoie\n");
+        }
+        free(message);
+        for(i = 0; i<300; i++){
+          description[i] = '\0';
+          reqVente.description[i]='\0';
+        }
+        if (suppression(listeVente)){
+          perror("suppression dans la liste");
+          break;
         }
         break;
       default:
@@ -168,7 +175,7 @@ int main(int argc, char *argv[]){
   int socket_ecoute, socket_service;
   static struct sockaddr_in addr_client;
   int lg;
-  listeVente = initialisation();
+  listeVente = initialiser();
   socket_ecoute = creerSocketTCP();
   if (socket_ecoute == -1){
     perror("creation socket service");

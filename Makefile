@@ -10,7 +10,7 @@ all: commissaire client
 	$(CC) $(CFLAGS) -c -o $@ $<
 client: client.c
 	$(CC) $(CFLAGS) -o $@ $^
-commissaire: serveur.c
+commissaire: serveur.c listeVente.o
 	$(CC) $(CFLAGS) -o $@ $^
 
 clean:

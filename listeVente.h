@@ -7,20 +7,21 @@ typedef struct Vente Vente;
 typedef struct ListeVente ListeVente;
 
 struct Vente {
-  struct requete_vente *vente;
+  struct requete_vente vente;
   Vente *suivant;
 };
 
 struct ListeVente{
     Vente *premier;
+    int nbElement;
 };
 
-ListeVente *initialisation();
+ListeVente *initialiser();
 
-void insertion(ListeVente *liste, struct requete_vente vente);
+int insertion(ListeVente *liste, struct requete_vente vente);
 
-void suppression(ListeVente *liste);
+int suppression(ListeVente *liste);
 
-int venteEnCours(ListeVente *liste, struct requete_vente reqVente));
+int venteEnCours(ListeVente *liste);
 
 #endif

@@ -11,7 +11,6 @@
 #include <errno.h>
 #include <string.h>
 #include <stdbool.h>
-#include <assert.h>
 
 #define TAILLEBUF 20
 #define TAILLEDESCVENTE 300
@@ -196,6 +195,9 @@ int main(int argc, char* argv[]){
             for(i=0; i<300; i++){
               reqVente.description[i]='\0';
             }
+            c = '';
+            printf("Voulez-vous participer à la vente ? y/n");
+            c = getchar();
             break;
           default:
               break;

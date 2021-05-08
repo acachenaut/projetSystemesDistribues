@@ -1,58 +1,59 @@
 #include "listeVente.h"
+#include "requete.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
 
-ListeVente *initialisation()
+ListeVente *initialiser()
 {
     ListeVente *liste = malloc(sizeof(*liste));
-    Vente *vente = malloc(sizeof(*element));
-
-    if (liste == NULL || vente == NULL)
-    {
-        exit(EXIT_FAILURE);
-    }
-
-    vente->vente->type_requete = -1;
-    vente->vente->id = 0;
-    vente->vente->description = "";
-    vente->vente->prix = 0;
-    vente->suivant = NULL;
-    liste->premier = vente;
+    liste->premier = NULL;
 
     return liste;
 }
 
-void insertion(ListeVente *liste, struct requete_vente vente)
-{
-    /* Création du nouvel élément */
+int insertion(ListeVente *liste, struct requete_vente vente){
     Vente *nouveau = malloc(sizeof(*nouveau));
-    if (liste == NULL || nouveau == NULL)
-    {
-        exit(EXIT_FAILURE);
+    if (liste == NULL || nouveau == NULL){
+        printf("erreur +");
+        return -1;
     }
-    nouveau->vente->type_requete = vente.type_requete;
-    nouveau->vente->id = vente.id;
-    nouveau->vente->description = vente.description;
-    nouveau->vente->prix = vente.prix;
+    nouveau->vente.type_requete = vente.type_requete;
+    nouveau->vente.id = vente.id;
+    strcpy(nouveau->vente.description, vente.description);
+    nouveau->vente.prix = vente.prix;
+    nouveau->suivant = NULL;
 
-    /* Insertion de l'élément au début de la liste */
-    nouveau->suivant = liste->premier;
-    liste->premier = nouveau;
+    if(liste->premier != NULL){
+      Vente *venteActuelle = liste->premier;
+      while(venteActuelle->suivant != NULL){
+        venteActuelle = venteActuelle->suivant;
+      }
+      venteActuelle->suivant = nouveau;
+      liste->nbElement ++;
+    }
+    else{
+      liste->premier = nouveau;
+      liste->nbElement = 1;
+    }
+    return 0;
 }
 
-void suppression(ListeVente *liste)
-{
-    if (liste == NULL)
-    {
-        exit(EXIT_FAILURE);
+int suppression(ListeVente *liste){
+    if (liste == NULL){
+        printf("erreur -");
+        return -1;
     }
-
-    if (liste->premier != NULL)
-    {
-        Element *aSupprimer = liste->premier;
+    if (liste->premier != NULL){
+        Vente *aSupprimer = liste->premier;
         liste->premier = liste->premier->suivant;
         free(aSupprimer);
+        liste->nbElement--;
     }
+    return 0;
 }
 
-int venteEnCours(ListeVente *liste, struct requete_vente reqVente){
-  return liste->premier == reqVente 0 ? 0 : 1;
+int venteEnCours(ListeVente *liste){
+  return !(liste->nbElement == 1);
 }
