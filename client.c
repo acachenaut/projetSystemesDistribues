@@ -17,7 +17,6 @@
 
 int sockTCP, sockUDP, longueur_adresse;
 static struct sockaddr_in adresseUDP;
-int participeVente, venteEnCours;
 FILE *fptr;
 
 int creerSocket(int type){
@@ -150,7 +149,7 @@ void requete_surenchere(int prix){
   reqVente.type_requete = SURENCHERE;
   reqVente.id = pid;
   reqVente.prix = prix;
-  memcpy(message, &reqVente, sizeof(struct requete));
+  memcpy(message, &reqVente, taille_msg);
   sendto(sockUDP, message, taille_msg , 0, (struct sockaddr*)&adresseUDP, longueur_adresse);
   free(message);
 }
@@ -158,7 +157,7 @@ void requete_surenchere(int prix){
 
 
 int main(int argc, char* argv[]){
-  int port, portUDP, choix, prixBien, pid, i;
+  int port, portUDP, choix, prixBien, pid, i, entierLu;
   char * message = "test";
   char *reponse;
   char reponseUDP[TAILLEBUF];
@@ -173,15 +172,13 @@ int main(int argc, char* argv[]){
   nomFichier = (char *) malloc(30);
   fptr = NULL;
   sprintf(nomFichier, "enchere%d.txt", getpid());
-  if((fptr = fopen(nomFichier, "w+"))==NULL){
+  if((fptr = fopen(nomFichier, "w"))==NULL){
     perror("erreur fichier");
     return 1;
   }
-  fputc(0, fptr);
-  fputc(0, fptr);
-  printf("%d\n", fgetc(fptr));
-  fseek(fptr, 1, SEEK_CUR);
-  printf("%d\n", fgetc(fptr));
+  putw(0, fptr);
+  putw(0, fptr);
+  fclose(fptr);
   port = atoi(argv[2]);
   if ((sockTCP = creerSocketTCP()) == -1){
     perror("creation socket tcp");
@@ -223,22 +220,33 @@ int main(int argc, char* argv[]){
         recv(sockUDP, &reqVente, sizeof(struct requete_vente), 0);
         switch (reqVente.type_requete) {
           case NOUVELLE_VENTE:
-            venteEnCours = true;
+            fptr = fopen(nomFichier,"r");
+            getw(fptr);
+            entierLu = getw(fptr);
+            fclose(fptr);
+            fptr = fopen(nomFichier,"w+");
+            putw(1, fptr);
+            putw(entierLu, fptr);
+            fclose(fptr);
             printf("Nouvelle vente de %d : %s , %d €\n", reqVente.id, reqVente.description, reqVente.prix);
             for(i=0; i<300; i++){
               reqVente.description[i]='\0';
             }
-            venteEnCours = true;
             break;
           case SURENCHERE:
-            if (participeVente) {
+            fptr = fopen(nomFichier, "r");
+            getw(fptr);
+            if(getw(fptr)){
               printf("Surenchere de %d : %d €\n", reqVente.id, reqVente.prix);
             }
+            fclose(fptr);
             break;
           case FIN_VENTE:
             printf("La vente est terminée\n");
-            venteEnCours = false;
-            participeVente = false;
+            fptr = fopen(nomFichier,"w+");
+            putw(0, fptr);
+            putw(0, fptr);
+            fclose(fptr);
             break;
           default:
             break;
@@ -247,7 +255,6 @@ int main(int argc, char* argv[]){
       break;
     default :
       choix = -1;
-      venteEnCours = 0;
       while(choix != 0){
         choix = -1;
         printf("0 - Quitter la vente aux encheres\n");
@@ -258,6 +265,7 @@ int main(int argc, char* argv[]){
           case 0:
             close(sockTCP);
             close(sockUDP);
+            remove(nomFichier);
             kill(pid, SIGKILL);
             break;
           case 1:
@@ -277,16 +285,31 @@ int main(int argc, char* argv[]){
             }
             break;
         case 2:
-          if(venteEnCours){
-            participeVente = true;
-            while (choix != 3 || venteEnCours){
+          fptr = fopen(nomFichier, "r");
+          if(getw(fptr)){
+            rewind(fptr);
+            entierLu = getw(fptr);
+            fclose(fptr);
+            fptr = fopen(nomFichier,"w+");
+            putw(entierLu, fptr);
+            putw(1, fptr);
+            fclose(fptr);
+            fptr = fopen(nomFichier, "r");
+            while (!(choix == 3 || !getw(fptr))){
+              fclose(fptr);
               choix = -1;
               printf("3 - Quitter la vente\n");
               printf("4 - Faire une enchère\n");
               scanf("%d", &choix);
               switch (choix) {
                 case 3:
-                  participeVente = false;
+                  fptr = fopen(nomFichier, "r");
+                  entierLu = getw(fptr);
+                  fclose(fptr);
+                  fptr = fopen(nomFichier,"w+");
+                  putw(entierLu, fptr);
+                  putw(0, fptr);
+                  fclose(fptr);
                   break;
                 case 4:
                   printf("Veuillez saisir votre prix :\n");
@@ -296,9 +319,11 @@ int main(int argc, char* argv[]){
                 default:
                   break;
               }
+              fptr = fopen(nomFichier, "r");
             }
           }
           else{
+            fclose(fptr);
             printf("Aucune vente en cours\n");
           }
           break;
@@ -312,7 +337,5 @@ int main(int argc, char* argv[]){
     close(sockUDP);
     break;
   }
-  fclose(fptr);
-  remove(nomFichier);
   return 0;
 }

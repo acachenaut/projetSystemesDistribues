@@ -23,8 +23,4 @@ struct requete_vente {
     int prix;
 };
 
-char *connexion_tcp(int pseudo);
-
-int requete_vente(char *description, int prix);
-
 #endif
