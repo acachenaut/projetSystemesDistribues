@@ -7,7 +7,7 @@ enum requete_t {
     REQUETE_VENTE,
     NOUVELLE_VENTE,
     SURENCHERE,
-    CONNEXION_UDP
+    FIN_VENTE
 };
 
 struct requete {

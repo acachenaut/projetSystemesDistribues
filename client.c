@@ -17,6 +17,7 @@
 
 int sockTCP, sockUDP, longueur_adresse;
 static struct sockaddr_in adresseUDP;
+FILE *fptr;
 
 int creerSocket(int type){
   int sock;
@@ -137,6 +138,22 @@ int requete_vente(char *description, int prix){
   return reponse;
 }
 
+void requete_surenchere(int prix){
+  struct requete_vente reqVente;
+  char *message;
+  int taille_msg;
+  int pid;
+  pid = getpid();
+  taille_msg = sizeof(struct requete_vente);
+  message = (char *) malloc(taille_msg);
+  reqVente.type_requete = SURENCHERE;
+  reqVente.id = pid;
+  reqVente.prix = prix;
+  memcpy(message, &reqVente, sizeof(struct requete));
+  sendto(sockUDP, message, taille_msg , 0, (struct sockaddr*)&adresseUDP, longueur_adresse);
+  free(message);
+}
+
 
 
 int main(int argc, char* argv[]){
@@ -146,10 +163,14 @@ int main(int argc, char* argv[]){
   char reponseUDP[TAILLEBUF];
   char * adresseIP = "";
   char descriptionBien[TAILLEDESCVENTE];
-  bool venteEnCours;
   char c;
   char saisieTmp[TAILLEDESCVENTE];
+  char *nomFichier;
   struct requete_vente reqVente;
+  sprintf(nomFichier, "enchere%d.txt", getpid());
+  fptr = fopen(nomFichier, "w+");
+  putw(0, fptr);
+  putw(0, fptr);
   port = atoi(argv[2]);
   if ((sockTCP = creerSocketTCP()) == -1){
     perror("creation socket tcp");
@@ -191,16 +212,25 @@ int main(int argc, char* argv[]){
         recv(sockUDP, &reqVente, sizeof(struct requete_vente), 0);
         switch (reqVente.type_requete) {
           case NOUVELLE_VENTE:
-            printf("Nouvelle vente de %d : %s , %d\n", reqVente.id, reqVente.description, reqVente.prix);
+            venteEnCours = true;
+            printf("Nouvelle vente de %d : %s , %d €\n", reqVente.id, reqVente.description, reqVente.prix);
             for(i=0; i<300; i++){
               reqVente.description[i]='\0';
             }
-            c = '';
-            printf("Voulez-vous participer à la vente ? y/n");
-            c = getchar();
+            venteEnCours = true;
+            break;
+          case SURENCHERE:
+            if (participeVente) {
+              printf("Surenchere de %d : %d €\n", reqVente.id, reqVente.prix);
+            }
+            break;
+          case FIN_VENTE:
+            printf("La vente est terminée\n");
+            venteEnCours = false;
+            participeVente = false;
             break;
           default:
-              break;
+            break;
           }
       }
       break;
@@ -211,9 +241,7 @@ int main(int argc, char* argv[]){
         choix = -1;
         printf("0 - Quitter la vente aux encheres\n");
         printf("1 - Proposer une vente\n");
-        if (venteEnCours){
-          printf("2 - Faire une offre\n");
-        }
+        printf("2 - Participer a la vente (vous ne pourrez pas proposer de vente tant que vous participez a la vente)\n");
         scanf("%d", &choix);
         switch (choix) {
           case 0:
@@ -236,8 +264,32 @@ int main(int argc, char* argv[]){
             for(i=0; i<300; i++){
               descriptionBien[i]='\0';
             }
-          break;
+            break;
         case 2:
+          if(venteEnCours){
+            participeVente = true;
+            while (choix != 3 || venteEnCours){
+              choix = -1;
+              printf("3 - Quitter la vente\n");
+              printf("4 - Faire une enchère\n");
+              scanf("%d", &choix);
+              switch (choix) {
+                case 3:
+                  participeVente = false;
+                  break;
+                case 4:
+                  printf("Veuillez saisir votre prix :\n");
+                  scanf("%d", &prixBien);
+                  requete_surenchere(prixBien);
+                  break;
+                default:
+                  break;
+              }
+            }
+          }
+          else{
+            printf("Aucune vente en cours\n");
+          }
           break;
         default:
           break;

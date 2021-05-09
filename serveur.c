@@ -143,7 +143,6 @@ void gererClient(int sock_client){
           break;
         }
         if (!venteEnCours(listeVente)){
-          printf("N'importe quoi\n");
           taille_msg = sizeof(struct requete_vente);
           message = (char *) malloc(sizeof(struct requete_vente));
           memcpy(message, &reqVente, sizeof(struct requete_vente));
