@@ -209,6 +209,7 @@ int main(int argc, char* argv[]){
     return 1;
 
   }
+  signal(SIGCHLD, SIG_IGN);
   pid = fork();
   switch(pid) {
     case -1 :

@@ -11,7 +11,7 @@ struct Vente {
   Vente *suivant;
 };
 
-struct ListeVente{
+struct ListeVente {
     Vente *premier;
     int nbElement;
 };

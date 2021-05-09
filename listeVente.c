@@ -16,7 +16,6 @@ ListeVente *initialiser()
 int insertion(ListeVente *liste, struct requete_vente vente){
     Vente *nouveau = malloc(sizeof(*nouveau));
     if (liste == NULL || nouveau == NULL){
-        printf("erreur +");
         return -1;
     }
     nouveau->vente.type_requete = vente.type_requete;
@@ -42,7 +41,6 @@ int insertion(ListeVente *liste, struct requete_vente vente){
 
 int suppression(ListeVente *liste){
     if (liste == NULL){
-        printf("erreur -");
         return -1;
     }
     if (liste->premier != NULL){

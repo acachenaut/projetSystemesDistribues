@@ -1,6 +1,7 @@
 #include "requete.h"
 #include "multicastAddr.h"
 #include "listeVente.h"
+#include "listeClient.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -18,6 +19,7 @@
 int sockUDP, longueur_adresse;
 static struct sockaddr_in adresseUDP;
 struct ListeVente *listeVente;
+struct ListeClient *listeClient;
 
 int creerSocket(int type){
   int sock;
@@ -85,8 +87,9 @@ int connexion_multicast(char * adresseIP, int portUDP){
   return 0;
 }
 
-char* connexion_tcp(int pseudo){
+char* nouveauClientTcp(int pseudo, int sock){
   char * reponse;
+  insertionClient(listeClient, pseudo, sock);
   reponse = (char*)malloc((sizeof(UDPPORT)+strlen(UDPADDR)+1));
   printf("Nouveau client connecte : %d \n", pseudo);
   sprintf(reponse, "%s;%d", UDPADDR, UDPPORT);
@@ -111,7 +114,7 @@ void gererClient(int sock_client){
     }
     switch (req.type_requete) {
       case CONNEXION_TCP:
-        res = connexion_tcp(req.id);
+        res = nouveauClientTcp(req.id, sock_client);
         if( write(sock_client, (char *)res, strlen(res)) <= 0){
           perror("envoi reponse\n");
           break;
@@ -162,6 +165,14 @@ void gererClient(int sock_client){
         break;
     }
   }
+  if (estPresent(listeClient, req.id)){
+    if (suppressionClient(listeClient, req.id) == -1){
+      perror("suppression du client");
+    }
+  }
+  else{
+    printf("Client pas present dans la liste\n");
+  }
   printf(" *** sortie de la boucle ***\n");
   while(1){
     printf("Lu : ");
@@ -171,10 +182,11 @@ void gererClient(int sock_client){
 }
 
 int main(int argc, char *argv[]){
-  int socket_ecoute, socket_service;
+  int socket_ecoute, socket_service, lg, pid;
   static struct sockaddr_in addr_client;
-  int lg;
+  struct requete_vente reqVente;
   listeVente = initialiser();
+  listeClient = init();
   socket_ecoute = creerSocketTCP();
   if (socket_ecoute == -1){
     perror("creation socket service");
@@ -197,15 +209,36 @@ int main(int argc, char *argv[]){
     return 1;
   }
   signal(SIGCHLD, SIG_IGN);
-  while(1){
-    lg = sizeof(struct sockaddr_in);
-    socket_service = accept(socket_ecoute,(struct sockaddr*)&addr_client,(socklen_t *) &lg);
-    if (fork()==0){
-      close(socket_ecoute);
-      gererClient(socket_service);
-      close(socket_service);
-      exit(0);
-    }
-    close(socket_service);
+  pid = fork();
+  switch (pid){
+    case -1 :
+      perror("Impossible de creer le processus fils\n");
+      return 1;
+      break;
+    case 0 :
+      while(1){
+        recv(sockUDP, &reqVente, sizeof(struct requete_vente), 0);
+        switch (reqVente.type_requete) {
+          case SURENCHERE:
+            printf("Surenchere de %d : %d €\n", reqVente.id, reqVente.prix);
+            break;
+          default:
+            break;
+          }
+      }
+      break;
+    default :
+      while(1){
+        lg = sizeof(struct sockaddr_in);
+        socket_service = accept(socket_ecoute,(struct sockaddr*)&addr_client,(socklen_t *) &lg);
+        if (fork()==0){
+          close(socket_ecoute);
+          gererClient(socket_service);
+          close(socket_service);
+          exit(0);
+        }
+        close(socket_service);
+      }
+      break;
   }
 }
