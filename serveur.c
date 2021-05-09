@@ -106,7 +106,7 @@ void gererClient(int sock_client){
   while(1) {
     nb_octets = read(sock_client, &req, sizeof(struct requete));
     if (nb_octets <= 0){
-      perror("reception donnees requête");
+      perror("Reception donnees requête/Aucune requête");
       break;
     }
     switch (req.type_requete) {

@@ -17,6 +17,7 @@
 
 int sockTCP, sockUDP, longueur_adresse;
 static struct sockaddr_in adresseUDP;
+int participeVente, venteEnCours;
 FILE *fptr;
 
 int creerSocket(int type){
@@ -167,10 +168,20 @@ int main(int argc, char* argv[]){
   char saisieTmp[TAILLEDESCVENTE];
   char *nomFichier;
   struct requete_vente reqVente;
+  /*TODO pb fichier, l'écriture ne fonctionne pas, rien n'est écrit dans le fichier mais aucune erreur
+  Par conséquent, fgetc() retourne -1*/
+  nomFichier = (char *) malloc(30);
+  fptr = NULL;
   sprintf(nomFichier, "enchere%d.txt", getpid());
-  fptr = fopen(nomFichier, "w+");
-  putw(0, fptr);
-  putw(0, fptr);
+  if((fptr = fopen(nomFichier, "w+"))==NULL){
+    perror("erreur fichier");
+    return 1;
+  }
+  fputc(0, fptr);
+  fputc(0, fptr);
+  printf("%d\n", fgetc(fptr));
+  fseek(fptr, 1, SEEK_CUR);
+  printf("%d\n", fgetc(fptr));
   port = atoi(argv[2]);
   if ((sockTCP = creerSocketTCP()) == -1){
     perror("creation socket tcp");
@@ -301,5 +312,7 @@ int main(int argc, char* argv[]){
     close(sockUDP);
     break;
   }
+  fclose(fptr);
+  remove(nomFichier);
   return 0;
 }
