@@ -7,6 +7,8 @@ enum requete_t {
     REQUETE_VENTE,
     NOUVELLE_VENTE,
     SURENCHERE,
+    ACQUEREUR,
+    VENDEUR,
     FIN_VENTE
 };
 

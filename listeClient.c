@@ -8,6 +8,7 @@ ListeClient *init(){
 
 int insertionClient(ListeClient *clients, int pseudo, int socket){
     Client *nouveau = malloc(sizeof(*nouveau));
+    Client *clientActuel;
     if (clients == NULL || nouveau == NULL){
       return -1;
     }
@@ -16,7 +17,7 @@ int insertionClient(ListeClient *clients, int pseudo, int socket){
     nouveau->suivant = NULL;
 
     if(clients->premier != NULL){
-      Client *clientActuel = clients->premier;
+      clientActuel = clients->premier;
       while(clientActuel->suivant != NULL){
         clientActuel = clientActuel->suivant;
       }
@@ -79,6 +80,7 @@ int trouverSocket(ListeClient *clients, int pseudo){
   }
   clientActuel = clients->premier;
   if (clientActuel->pseudo == pseudo){
+    printf("c est du chinois\n");
     return clientActuel->socket;
   }
   else {
@@ -86,8 +88,10 @@ int trouverSocket(ListeClient *clients, int pseudo){
         clientActuel = clientActuel->suivant;
     }
     if (clientActuel->suivant != NULL) {
+        printf("c est du chinois 2\n");
         return clientActuel->suivant->socket;
     }
   }
+  printf("c est du chinois 3\n");
   return 0;
 }

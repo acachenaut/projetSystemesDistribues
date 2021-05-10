@@ -9,6 +9,7 @@ ListeVente *initialiser()
 {
     ListeVente *liste = malloc(sizeof(*liste));
     liste->premier = NULL;
+    liste->nbElement = 0;
 
     return liste;
 }
@@ -44,9 +45,9 @@ int suppression(ListeVente *liste){
         return -1;
     }
     if (liste->premier != NULL){
-        Vente *aSupprimer = liste->premier;
+        /*Vente *aSupprimer = liste->premier;*/
         liste->premier = liste->premier->suivant;
-        free(aSupprimer);
+        /*free(aSupprimer);*/
         liste->nbElement--;
     }
     return 0;

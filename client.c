@@ -65,12 +65,12 @@ int connexion_multicast(char * adresseIP, int portUDP){
   gr_multicast.imr_multiaddr.s_addr = ip.s_addr;
   gr_multicast.imr_interface.s_addr = htons(INADDR_ANY);
   if (setsockopt(sockUDP, IPPROTO_IP, IP_ADD_MEMBERSHIP, &gr_multicast, sizeof(struct ip_mreq)) == -1) {
-    printf("Erreur setsockopt : ");
+    perror("Erreur setsockopt");
     return -1;
   }
   reuse = 1;
   if (setsockopt(sockUDP, SOL_SOCKET, SO_REUSEADDR, (int *)&reuse, sizeof(reuse)) == -1) {
-    printf("Erreur setsockopt : ");
+    perror("Erreur setsockopt");
     return -1;
   }
   bzero((char *) &ad_multicast, sizeof(ad_multicast));
@@ -78,7 +78,7 @@ int connexion_multicast(char * adresseIP, int portUDP){
   ad_multicast.sin_addr.s_addr = htons(INADDR_ANY);
   ad_multicast.sin_port = htons(portUDP);
   if (bind(sockUDP, (struct sockaddr*)&ad_multicast, sizeof(struct sockaddr_in)) == -1) {
-    printf("Erreur bind : ");
+    perror("Erreur bind");
     return -1;
   }
   longueur_adresse = sizeof(struct sockaddr_in);
@@ -157,7 +157,7 @@ void requete_surenchere(int prix){
 
 
 int main(int argc, char* argv[]){
-  int port, portUDP, choix, prixBien, pid, i, entierLu;
+  int port, portUDP, choix, prixBien, pid, i, entierLu, entierLuBis,  prixCorrect, meilleurPrix;
   char * message = "test";
   char *reponse;
   char reponseUDP[TAILLEBUF];
@@ -167,9 +167,7 @@ int main(int argc, char* argv[]){
   char saisieTmp[TAILLEDESCVENTE];
   char *nomFichier;
   struct requete_vente reqVente;
-  /*TODO pb fichier, l'écriture ne fonctionne pas, rien n'est écrit dans le fichier mais aucune erreur
-  Par conséquent, fgetc() retourne -1*/
-  nomFichier = (char *) malloc(30);
+  nomFichier = (char *) malloc(16);
   fptr = NULL;
   sprintf(nomFichier, "enchere%d.txt", getpid());
   if((fptr = fopen(nomFichier, "w"))==NULL){
@@ -228,6 +226,7 @@ int main(int argc, char* argv[]){
             fptr = fopen(nomFichier,"w+");
             putw(1, fptr);
             putw(entierLu, fptr);
+            putw(reqVente.prix, fptr);
             fclose(fptr);
             printf("Nouvelle vente de %d : %s , %d €\n", reqVente.id, reqVente.description, reqVente.prix);
             for(i=0; i<300; i++){
@@ -236,15 +235,24 @@ int main(int argc, char* argv[]){
             break;
           case SURENCHERE:
             fptr = fopen(nomFichier, "r");
-            getw(fptr);
-            if(getw(fptr)){
+            entierLu = getw(fptr);
+            if((entierLuBis = getw(fptr))){
+              fclose(fptr);
               printf("Surenchere de %d : %d €\n", reqVente.id, reqVente.prix);
+              fptr = fopen(nomFichier,"w+");
+              putw(entierLu, fptr);
+              putw(entierLuBis, fptr);
+              putw(reqVente.prix, fptr);
+              fclose(fptr);
             }
-            fclose(fptr);
+            else{
+              fclose(fptr);
+            }
             break;
           case FIN_VENTE:
             printf("La vente est terminée\n");
             fptr = fopen(nomFichier,"w+");
+            putw(0, fptr);
             putw(0, fptr);
             putw(0, fptr);
             fclose(fptr);
@@ -258,9 +266,9 @@ int main(int argc, char* argv[]){
       choix = -1;
       while(choix != 0){
         choix = -1;
-        printf("0 - Quitter la vente aux encheres\n");
+        printf("\n0 - Quitter la vente aux encheres\n");
         printf("1 - Proposer une vente\n");
-        printf("2 - Participer a la vente (vous ne pourrez pas proposer de vente tant que vous participez a la vente)\n");
+        printf("2 - Participer a la vente (vous ne pourrez pas proposer de vente tant que vous participez a la vente)\n\n");
         scanf("%d", &choix);
         switch (choix) {
           case 0:
@@ -290,31 +298,51 @@ int main(int argc, char* argv[]){
           if(getw(fptr)){
             rewind(fptr);
             entierLu = getw(fptr);
+            getw(fptr);
+            entierLuBis = getw(fptr);
             fclose(fptr);
             fptr = fopen(nomFichier,"w+");
             putw(entierLu, fptr);
             putw(1, fptr);
+            putw(entierLuBis, fptr);
             fclose(fptr);
             fptr = fopen(nomFichier, "r");
             while (!(choix == 3 || !getw(fptr))){
               fclose(fptr);
               choix = -1;
-              printf("3 - Quitter la vente\n");
-              printf("4 - Faire une enchère\n");
+              printf("\n3 - Quitter la vente\n");
+              printf("4 - Faire une enchère\n\n");
               scanf("%d", &choix);
               switch (choix) {
                 case 3:
                   fptr = fopen(nomFichier, "r");
                   entierLu = getw(fptr);
+                  getw(fptr);
+                  entierLuBis = getw(fptr);
                   fclose(fptr);
                   fptr = fopen(nomFichier,"w+");
                   putw(entierLu, fptr);
                   putw(0, fptr);
+                  putw(entierLuBis, fptr);
                   fclose(fptr);
                   break;
                 case 4:
                   printf("Veuillez saisir votre prix :\n");
-                  scanf("%d", &prixBien);
+                  do {
+                    fptr = fopen(nomFichier, "r");
+                    getw(fptr);
+                    getw(fptr);
+                    meilleurPrix = getw(fptr);
+                    fclose(fptr);
+                    scanf("%d", &prixBien);
+                    if (prixBien <= meilleurPrix){
+                      prixCorrect = 0;
+                      printf("Votre prix n'est pas assez eleve, ressaisissez un prix :\n");
+                    }
+                    else{
+                      prixCorrect = 1;
+                    }
+                  }while (prixCorrect==0);
                   requete_surenchere(prixBien);
                   break;
                 default:
