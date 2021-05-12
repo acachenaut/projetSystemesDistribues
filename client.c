@@ -10,14 +10,16 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <string.h>
-#include <stdbool.h>
+#include <pthread.h>
 
 #define TAILLEBUF 20
 #define TAILLEDESCVENTE 300
 
-int sockTCP, sockUDP, longueur_adresse;
+int sockTCP, sockUDP, longueur_adresse, venteEnCours, participeVente, prixEnchere, requeteVente;
 static struct sockaddr_in adresseUDP;
-FILE *fptr;
+pthread_t thread_UDP;
+pthread_t thread_TCP;
+pthread_t thread_Menu;
 
 int creerSocket(int type){
   int sock;
@@ -114,9 +116,7 @@ char *connexion_tcp(int pseudo){
 int requete_vente(char *description, int prix){
   struct requete req;
   char *message;
-  int taille_msg;
-  int reponse;
-  int pid;
+  int taille_msg, reponse, pid;
   pid = getpid();
   taille_msg = sizeof(struct requete) + sizeof(int) + strlen(description) + sizeof(int);
   message = (char *) malloc(taille_msg);
@@ -130,10 +130,9 @@ int requete_vente(char *description, int prix){
     free(message);
     return -1;
   }
-  if (read(sockTCP, &reponse, sizeof(int)) <= 0){
-    free(message);
-    return -1;
-  }
+  while(requeteVente != 0);
+  reponse = requeteVente;
+  requeteVente = -1;
   free(message);
   return reponse;
 }
@@ -154,29 +153,156 @@ void requete_surenchere(int prix){
   free(message);
 }
 
+static void *ecouteGroupeMulticast(void *p_data){
+  int i;
+  struct requete_vente reqVente;
+  while(1){
+    recv(sockUDP, &reqVente, sizeof(struct requete_vente), 0);
+    switch (reqVente.type_requete) {
+      case NOUVELLE_VENTE:
+        venteEnCours = 1;
+        prixEnchere = reqVente.prix;
+        printf("Nouvelle vente de %d : %s , %d €\n", reqVente.id, reqVente.description, reqVente.prix);
+        for(i=0; i<300; i++){
+          reqVente.description[i]='\0';
+        }
+        break;
+      case SURENCHERE:
+        if(participeVente){
+          printf("Surenchère de %d : %d €\n", reqVente.id, reqVente.prix);
+          prixEnchere = reqVente.prix;
+        }
+        break;
+      case FIN_VENTE:
+        printf("La vente est remportée par %d au prix de %d €\n", reqVente.id, reqVente.prix);
+        venteEnCours = 0;
+        participeVente = 0;
+        prixEnchere = 0;
+        break;
+      case OBJET_INVENDU:
+        printf("L'objet n'a pas trouvé preneur\n");
+        venteEnCours = 0;
+        participeVente = 0;
+        prixEnchere = 0;
+      default:
+        break;
+      }
+  }
+  return 0;
+}
+
+static void *ecouteTcp(void *p_data){
+  struct requete_vente reqVente;
+  while(1){
+
+    if (read(sockTCP, &reqVente, sizeof(struct requete_vente)) <= 0){
+      return NULL;
+    }
+    switch (reqVente.type_requete) {
+      case ACQUEREUR:
+        printf("Vous avez gagné l'enchère au prix de %d €\n", reqVente.prix);
+        break;
+      case VENDEUR:
+        printf("Votre objet a été acheté par %d au prix de %d €\n", reqVente.id, reqVente.prix);
+        break;
+      case OBJET_INVENDU:
+        printf("Votre objet n'a pu être vendu\n");
+        break;
+      case REQUETE_VENTE:
+        requeteVente = reqVente.id;
+        break;
+      default:
+        break;
+      }
+  }
+  return 0;
+}
+
+static void *gestionMenu(void *p_data){
+  int choix, prixBien, i, prixCorrect;
+  char saisieTmp[TAILLEDESCVENTE];
+  char descriptionBien[TAILLEDESCVENTE];
+  char c;
+  choix = -1;
+  while(choix != 0){
+    choix = -1;
+    printf("\n0 - Quitter la vente aux enchères\n");
+    printf("1 - Proposer une vente\n");
+    printf("2 - Participer a la vente (vous ne pourrez pas proposer de vente tant que vous participez a la vente)\n\n");
+    scanf("%d", &choix);
+    switch (choix) {
+        case 0:
+          close(sockTCP);
+          close(sockUDP);
+          pthread_cancel(thread_TCP);
+          pthread_cancel(thread_UDP);
+        break;
+      case 1:
+        printf("Veuillez saisir la description de votre bien : \n");
+        while ((c = (char) getchar()) != EOF && c != '\t' && c != '\n' && c != ' ');
+        fgets(saisieTmp, TAILLEDESCVENTE, stdin);
+        saisieTmp[strlen(saisieTmp) - 1] = '\0';
+        strcat(descriptionBien, saisieTmp);
+        printf("Veuillez saisir le prix de votre bien en € : \n");
+        scanf("%d", &prixBien);
+        if(requete_vente(descriptionBien, prixBien) == -1){
+          printf("Erreur demande de vente\n");
+          return NULL;
+        }
+        for(i=0; i<300; i++){
+          descriptionBien[i]='\0';
+        }
+        break;
+      case 2:
+        if(venteEnCours){
+          participeVente = 1;
+          while (!(choix == 3 || !venteEnCours)){
+            choix = -1;
+            printf("\n3 - Quitter la vente\n");
+            printf("4 - Faire une enchère\n\n");
+            scanf("%d", &choix);
+            switch (choix) {
+              case 3:
+                participeVente = 0;
+                break;
+              case 4:
+                printf("Veuillez saisir votre prix :\n");
+                do {
+                  scanf("%d", &prixBien);
+                  if (prixBien <= prixEnchere){
+                    prixCorrect = 0;
+                    printf("Votre prix n'est pas assez eleve, ressaisissez un prix :\n");
+                  }
+                  else{
+                    prixCorrect = 1;
+                  }
+                }while (!prixCorrect);
+                requete_surenchere(prixBien);
+                break;
+              default:
+                break;
+            }
+          }
+        }
+        else{
+            printf("Aucune vente en cours\n");
+        }
+        break;
+      default:
+        break;
+    }
+  }
+  return 0;
+}
+
 
 
 int main(int argc, char* argv[]){
-  int port, portUDP, choix, prixBien, pid, i, entierLu, entierLuBis,  prixCorrect, meilleurPrix;
-  char * message = "test";
+  int port, portUDP, thread;
   char *reponse;
-  char reponseUDP[TAILLEBUF];
   char * adresseIP = "";
-  char descriptionBien[TAILLEDESCVENTE];
-  char c;
-  char saisieTmp[TAILLEDESCVENTE];
-  char *nomFichier;
-  struct requete_vente reqVente;
-  nomFichier = (char *) malloc(16);
-  fptr = NULL;
-  sprintf(nomFichier, "enchere%d.txt", getpid());
-  if((fptr = fopen(nomFichier, "w"))==NULL){
-    perror("erreur fichier");
-    return 1;
-  }
-  putw(0, fptr);
-  putw(0, fptr);
-  fclose(fptr);
+  venteEnCours = 0;
+  participeVente = 0;
   port = atoi(argv[2]);
   if ((sockTCP = creerSocketTCP()) == -1){
     perror("creation socket tcp");
@@ -207,164 +333,27 @@ int main(int argc, char* argv[]){
     return 1;
 
   }
-  signal(SIGCHLD, SIG_IGN);
-  pid = fork();
-  switch(pid) {
-    case -1 :
-      perror("Impossible de creer le processus fils\n");
-      return 1;
-      break;
-    case 0 :
-      while(1){
-        recv(sockUDP, &reqVente, sizeof(struct requete_vente), 0);
-        switch (reqVente.type_requete) {
-          case NOUVELLE_VENTE:
-            fptr = fopen(nomFichier,"r");
-            getw(fptr);
-            entierLu = getw(fptr);
-            fclose(fptr);
-            fptr = fopen(nomFichier,"w+");
-            putw(1, fptr);
-            putw(entierLu, fptr);
-            putw(reqVente.prix, fptr);
-            fclose(fptr);
-            printf("Nouvelle vente de %d : %s , %d €\n", reqVente.id, reqVente.description, reqVente.prix);
-            for(i=0; i<300; i++){
-              reqVente.description[i]='\0';
-            }
-            break;
-          case SURENCHERE:
-            fptr = fopen(nomFichier, "r");
-            entierLu = getw(fptr);
-            if((entierLuBis = getw(fptr))){
-              fclose(fptr);
-              printf("Surenchere de %d : %d €\n", reqVente.id, reqVente.prix);
-              fptr = fopen(nomFichier,"w+");
-              putw(entierLu, fptr);
-              putw(entierLuBis, fptr);
-              putw(reqVente.prix, fptr);
-              fclose(fptr);
-            }
-            else{
-              fclose(fptr);
-            }
-            break;
-          case FIN_VENTE:
-            printf("La vente est terminée\n");
-            fptr = fopen(nomFichier,"w+");
-            putw(0, fptr);
-            putw(0, fptr);
-            putw(0, fptr);
-            fclose(fptr);
-            break;
-          default:
-            break;
-          }
-      }
-      break;
-    default :
-      choix = -1;
-      while(choix != 0){
-        choix = -1;
-        printf("\n0 - Quitter la vente aux encheres\n");
-        printf("1 - Proposer une vente\n");
-        printf("2 - Participer a la vente (vous ne pourrez pas proposer de vente tant que vous participez a la vente)\n\n");
-        scanf("%d", &choix);
-        switch (choix) {
-          case 0:
-            close(sockTCP);
-            close(sockUDP);
-            remove(nomFichier);
-            kill(pid, SIGKILL);
-            break;
-          case 1:
-            printf("Veuillez saisir la description de votre bien : \n");
-            while ((c = (char) getchar()) != EOF && c != '\t' && c != '\n' && c != ' ');
-            fgets(saisieTmp, TAILLEDESCVENTE, stdin);
-            saisieTmp[strlen(saisieTmp) - 1] = '\0';
-            strcat(descriptionBien, saisieTmp);
-            printf("Veuillez saisir le prix de votre bien en € : \n");
-            scanf("%d", &prixBien);
-            if(requete_vente(descriptionBien, prixBien) == -1){
-              printf("Erreur demande de vente\n");
-              return 1;
-            }
-            for(i=0; i<300; i++){
-              descriptionBien[i]='\0';
-            }
-            break;
-        case 2:
-          fptr = fopen(nomFichier, "r");
-          if(getw(fptr)){
-            rewind(fptr);
-            entierLu = getw(fptr);
-            getw(fptr);
-            entierLuBis = getw(fptr);
-            fclose(fptr);
-            fptr = fopen(nomFichier,"w+");
-            putw(entierLu, fptr);
-            putw(1, fptr);
-            putw(entierLuBis, fptr);
-            fclose(fptr);
-            fptr = fopen(nomFichier, "r");
-            while (!(choix == 3 || !getw(fptr))){
-              fclose(fptr);
-              choix = -1;
-              printf("\n3 - Quitter la vente\n");
-              printf("4 - Faire une enchère\n\n");
-              scanf("%d", &choix);
-              switch (choix) {
-                case 3:
-                  fptr = fopen(nomFichier, "r");
-                  entierLu = getw(fptr);
-                  getw(fptr);
-                  entierLuBis = getw(fptr);
-                  fclose(fptr);
-                  fptr = fopen(nomFichier,"w+");
-                  putw(entierLu, fptr);
-                  putw(0, fptr);
-                  putw(entierLuBis, fptr);
-                  fclose(fptr);
-                  break;
-                case 4:
-                  printf("Veuillez saisir votre prix :\n");
-                  do {
-                    fptr = fopen(nomFichier, "r");
-                    getw(fptr);
-                    getw(fptr);
-                    meilleurPrix = getw(fptr);
-                    fclose(fptr);
-                    scanf("%d", &prixBien);
-                    if (prixBien <= meilleurPrix){
-                      prixCorrect = 0;
-                      printf("Votre prix n'est pas assez eleve, ressaisissez un prix :\n");
-                    }
-                    else{
-                      prixCorrect = 1;
-                    }
-                  }while (prixCorrect==0);
-                  requete_surenchere(prixBien);
-                  break;
-                default:
-                  break;
-              }
-              fptr = fopen(nomFichier, "r");
-            }
-          }
-          else{
-            fclose(fptr);
-            printf("Aucune vente en cours\n");
-          }
-          break;
-        default:
-          break;
+  thread = pthread_create(&thread_UDP, NULL, ecouteGroupeMulticast, NULL);
+  if (!thread){
+    thread = pthread_create(&thread_Menu, NULL, gestionMenu, NULL);
+    if (!thread){
+      thread = pthread_create(&thread_TCP, NULL, ecouteTcp, NULL);
+      if (thread){
+        perror("creation thread tcp");
+        return 1;
       }
     }
-    sendto(sockUDP, message, strlen(message)+1 , 0, (struct sockaddr*)&adresseUDP, longueur_adresse);
-    recv(sockUDP, (char*)reponseUDP, TAILLEBUF, 0);
-    printf("%s\n", reponseUDP );
-    close(sockUDP);
-    break;
+    else{
+      perror("creation thread tcp");
+      return 1;
+    }
   }
+  else {
+    perror("creation thread udp");
+    return 1;
+  }
+  pthread_join(thread_UDP, NULL);
+  pthread_join(thread_Menu, NULL);
+  pthread_join(thread_TCP, NULL);
   return 0;
 }

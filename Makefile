@@ -1,5 +1,6 @@
 CC= gcc
-CFLAGS= -std=c89 -pedantic -Wall -Werror -g -D_GNU_SOURCE
+CFLAGS= -std=c89 -pedantic -Wall -Werror -g -D_REENTRANT -D_GNU_SOURCE
+LIBRARY= -lpthread
 RM= rm -fv
 
 
@@ -9,9 +10,9 @@ all: commissaire client
 %.o: %.c %.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 client: client.c
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBRARY)
 commissaire: serveur.c listeVente.o listeClient.o
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBRARY)
 
 clean:
 	$(RM) *.o *.out commissaire client

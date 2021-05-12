@@ -45,14 +45,21 @@ int suppression(ListeVente *liste){
         return -1;
     }
     if (liste->premier != NULL){
-        /*Vente *aSupprimer = liste->premier;*/
+        Vente *aSupprimer = liste->premier;
         liste->premier = liste->premier->suivant;
-        /*free(aSupprimer);*/
+        free(aSupprimer);
         liste->nbElement--;
     }
     return 0;
 }
 
-int venteEnCours(ListeVente *liste){
-  return !(liste->nbElement == 1);
+int nbElementListe(ListeVente *liste){
+  return liste->nbElement;
+}
+
+int vendeurVenteEnCours(ListeVente *liste){
+  if (liste == NULL){
+      return -1;
+  }
+  return liste->premier->vente.id;
 }

@@ -22,6 +22,8 @@ int insertion(ListeVente *liste, struct requete_vente vente);
 
 int suppression(ListeVente *liste);
 
-int venteEnCours(ListeVente *liste);
+int nbElementListe(ListeVente *liste);
+
+int vendeurVenteEnCours(ListeVente *liste);
 
 #endif

@@ -36,8 +36,8 @@ int suppressionClient(ListeClient *clients, int pseudo){
     }
     clientActuel = clients->premier;
     if (clientActuel->pseudo == pseudo){
-      Client *aSupprimer = clientActuel->suivant;
-      clientActuel->suivant = aSupprimer->suivant;
+      Client *aSupprimer = clientActuel;
+      clients->premier = aSupprimer->suivant;
       free(aSupprimer);
     }
     else {
@@ -46,8 +46,11 @@ int suppressionClient(ListeClient *clients, int pseudo){
       }
       if (clientActuel->suivant != NULL) {
           Client *aSupprimer = clientActuel->suivant;
-          clientActuel->suivant = aSupprimer->suivant;
+          clientActuel = aSupprimer->suivant;
           free(aSupprimer);
+      }
+      else {
+        clientActuel = NULL;
       }
     }
     return 0;
@@ -59,6 +62,9 @@ int estPresent(ListeClient *clients, int pseudo){
     return -1;
   }
   clientActuel = clients->premier;
+  if (clientActuel == NULL){
+    return 0;
+  }
   if (clientActuel->pseudo == pseudo){
     return 1;
   }
@@ -80,7 +86,6 @@ int trouverSocket(ListeClient *clients, int pseudo){
   }
   clientActuel = clients->premier;
   if (clientActuel->pseudo == pseudo){
-    printf("c est du chinois\n");
     return clientActuel->socket;
   }
   else {
@@ -88,10 +93,8 @@ int trouverSocket(ListeClient *clients, int pseudo){
         clientActuel = clientActuel->suivant;
     }
     if (clientActuel->suivant != NULL) {
-        printf("c est du chinois 2\n");
         return clientActuel->suivant->socket;
     }
   }
-  printf("c est du chinois 3\n");
   return 0;
 }

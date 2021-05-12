@@ -9,6 +9,7 @@ enum requete_t {
     SURENCHERE,
     ACQUEREUR,
     VENDEUR,
+    OBJET_INVENDU,
     FIN_VENTE
 };
 

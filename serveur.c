@@ -16,14 +16,14 @@
 #include <sys/ipc.h>
 #include <sys/mman.h>
 #include <fcntl.h>
+#include <pthread.h>
 
-#define NOM_FICHIER "serveur.txt"
-#define NOM_FICHIER_L_VENTE "listeVente.txt"
-#define NOM_FICHIER_L_CLIENT "listeClient.txt"
-
-int sockUDP, longueur_adresse;
+int sockUDP, longueur_adresse, venteEnCours, pseudoMeilleurEnchere, prixMeilleurEnchere;
 static struct sockaddr_in adresseUDP;
-FILE *fptr;
+ListeVente *listeVente;
+ListeClient *listeClient;
+pthread_t thread_UDP;
+pthread_t thread_TCP;
 
 int creerSocket(int type){
   int sock;
@@ -100,94 +100,52 @@ int connexion_multicast(char * adresseIP, int portUDP){
 
 char* nouveauClientTcp(int pseudo, int sock){
   char * reponse;
-  Client* clientActuel = (Client *)malloc(sizeof(struct Client));
-  clientActuel->pseudo = pseudo;
-  clientActuel->socket = sock;
-  fptr = fopen(NOM_FICHIER_L_CLIENT, "w");
-  fwrite (clientActuel, sizeof(struct Client), 1, fptr);
-  fclose(fptr);
+  insertionClient(listeClient, pseudo, sock);
   reponse = (char*)malloc((sizeof(UDPPORT)+strlen(UDPADDR)+1));
   printf("Nouveau client connecte : %d \n", pseudo);
   sprintf(reponse, "%s;%d", UDPADDR, UDPPORT);
   return reponse;
 }
 
-int rechercherClient(int id){
-  Client *clientActuel = (Client *)malloc(sizeof(struct Client));
-  int readResult;
-  int pseudo;
-  pseudo = -1;
-  fptr = fopen(NOM_FICHIER_L_CLIENT, "r");
-  while((readResult=fread(clientActuel, sizeof(struct Client), 1, fptr)) && (pseudo != id)){
-    pseudo = clientActuel->pseudo;
-  }
-  if (readResult == EOF){
-    return -1;
-  }
-  fclose(fptr);
-  return clientActuel->socket;
-}
-
-int supprimerPremiereVente(){
-  FILE *fptrBuffer;
-  struct requete_vente *venteActuelle = malloc(sizeof(struct requete_vente));
-  int readResult;
-  fptr = fopen(NOM_FICHIER_L_VENTE, "r");
-  fptrBuffer = fopen("buffer.txt", "w");
-  fread(venteActuelle, sizeof(struct requete_vente), 1, fptr);
-  while((readResult=fread(venteActuelle, sizeof(struct requete_vente), 1, fptr))){
-    fwrite (venteActuelle, sizeof(struct requete_vente), 1, fptrBuffer);
-  }
-  fclose(fptr);
-  fclose(fptrBuffer);
-  fptr = fopen(NOM_FICHIER_L_VENTE, "w");
-  fptrBuffer = fopen("buffer.txt", "r");
-  while(fread(venteActuelle, sizeof(struct requete_vente), 1, fptrBuffer)){
-    fwrite (venteActuelle, sizeof(struct requete_vente), 1, fptr);
-  }
-  fclose(fptr);
-  fclose(fptrBuffer);
-  remove("buffer.txt");
-  return 0;
-}
-
-void gererClient(int sock_client){
+static void *gererClient(void *p_data){
   struct requete req;
   struct requete_vente reqVente;
-  int nb_octets;
+  int nb_octets, sock_client, prix, taille_msg, i, pseudo;
   char *message;
   char description[300];
-  int prix, reponseReqVente, taille_msg, i;
   char* res;
+  sock_client = *((int *)p_data);
   printf(" *** nouveau client connecte ***\n");
   while(1) {
     nb_octets = read(sock_client, &req, sizeof(struct requete));
     if (nb_octets <= 0){
-      perror("Reception donnees requête/Aucune requête");
+      perror("Réception données requête/Aucune requête");
       break;
     }
     switch (req.type_requete) {
       case CONNEXION_TCP:
         res = nouveauClientTcp(req.id, sock_client);
+        pseudo = req.id;
         if( write(sock_client, (char *)res, strlen(res)) <= 0){
-          perror("envoi reponse\n");
+          perror("envoi réponse\n");
           break;
         }
         break;
       case REQUETE_VENTE:
-        reponseReqVente = 0;
         nb_octets = read(sock_client, description, req.taille_requete-sizeof(int));
         if (nb_octets <= 0){
-            perror("reception donnees description");
+            perror("réception données description");
             break;
         }
         nb_octets = read(sock_client, &prix, sizeof(int));
         if (nb_octets <= 0){
-            perror("reception donnees description");
+            perror("réception données description");
             break;
         }
-        if( write(sock_client, &reponseReqVente, sizeof(int)) <= 0){
-            perror("envoi reponse\n");
+        reqVente.type_requete = REQUETE_VENTE;
+        reqVente.id = 0;
+        if( write(sock_client, &reqVente, sizeof(struct requete_vente)) <= 0){
+            perror("envoi réponse\n");
             break;
         }
         printf("Nouvelle vente de %d : %s , %d\n", req.id, description, prix);
@@ -195,27 +153,17 @@ void gererClient(int sock_client){
         reqVente.id = req.id;
         strcpy(reqVente.description, description);
         reqVente.prix = prix;
-        fptr = fopen(NOM_FICHIER_L_VENTE, "r");
-        fseek(fptr, 0, SEEK_END);
-        if (ftell(fptr)==0){
-          fclose(fptr);
+        if (nbElementListe(listeVente) == 0){
           taille_msg = sizeof(struct requete_vente);
           message = (char *) malloc(sizeof(struct requete_vente));
           memcpy(message, &reqVente, sizeof(struct requete_vente));
           sendto(sockUDP, message, taille_msg , 0, (struct sockaddr*)&adresseUDP, longueur_adresse);
-          fptr = fopen(NOM_FICHIER, "w+");
-          putw(1, fptr);
-          putw(reqVente.id, fptr);
-          putw(reqVente.prix, fptr);
-          fclose(fptr);
+          venteEnCours = 1;
+          pseudoMeilleurEnchere = reqVente.id;
+          prixMeilleurEnchere = reqVente.prix;
           free(message);
         }
-        else{
-          fclose(fptr);
-        }
-        fptr = fopen(NOM_FICHIER_L_VENTE, "a");
-        fwrite (&reqVente, sizeof(struct requete_vente), 1, fptr);
-        fclose(fptr);
+        insertion(listeVente, reqVente);
         for(i = 0; i<300; i++){
           description[i] = '\0';
           reqVente.description[i]='\0';
@@ -225,31 +173,174 @@ void gererClient(int sock_client){
         break;
     }
   }
-  printf(" *** sortie de la boucle ***\n");
+  suppressionClient(listeClient, pseudo);
+  printf(" *** client %d deconnecté ***\n", pseudo);
+  return 0;
+}
+
+static void *ecouteGroupeMulticast(void * p_data){
+  int pseudoVendeur, socketClient;
+  struct requete_vente reqVente;
+  int taille_msg;
+  char *message = "";
+  while(1){
+    if (venteEnCours){
+      if (recv(sockUDP, &reqVente, sizeof(struct requete_vente), 0) == -1){
+        if (estPresent(listeClient, reqVente.id)){
+          if ((socketClient = trouverSocket(listeClient, reqVente.id)) != 0 && socketClient != -1){
+            if (pseudoMeilleurEnchere == reqVente.id && listeVente->premier->vente.prix == reqVente.prix){
+              reqVente.type_requete = OBJET_INVENDU;
+              taille_msg = sizeof(struct requete_vente);
+              message = (char *) malloc(sizeof(struct requete_vente));
+              memcpy(message, &reqVente, sizeof(struct requete_vente));
+              sendto(sockUDP, message, taille_msg , 0, (struct sockaddr*)&adresseUDP, longueur_adresse);
+              if( write(socketClient, message, taille_msg) <= 0){
+                perror("reponse vendeur");
+                break;
+              }
+              free(message);
+            }
+            else {
+              reqVente.type_requete = FIN_VENTE;
+              reqVente.id = pseudoMeilleurEnchere;
+              reqVente.prix = prixMeilleurEnchere;
+              taille_msg = sizeof(struct requete_vente);
+              message = (char *) malloc(sizeof(struct requete_vente));
+              memcpy(message, &reqVente, sizeof(struct requete_vente));
+              sendto(sockUDP, message, taille_msg , 0, (struct sockaddr*)&adresseUDP, longueur_adresse);
+              free(message);
+              reqVente.type_requete = ACQUEREUR;
+              taille_msg = sizeof(struct requete_vente);
+              message = (char *) malloc(sizeof(struct requete_vente));
+              memcpy(message, &reqVente, sizeof(struct requete_vente));
+              if( write(socketClient, message, taille_msg) <= 0){
+                perror("reponse acquereur");
+                break;
+              }
+              free(message);
+              if((pseudoVendeur = vendeurVenteEnCours(listeVente)) == -1){
+                perror("aucune vente en cours");
+                return NULL;
+              }
+              if (estPresent(listeClient, pseudoVendeur)){
+                if ((socketClient = trouverSocket(listeClient, pseudoVendeur)) != 0 && socketClient != -1){
+                  reqVente.type_requete = VENDEUR;
+                  taille_msg = sizeof(struct requete_vente);
+                  message = (char *) malloc(sizeof(struct requete_vente));
+                  memcpy(message, &reqVente, sizeof(struct requete_vente));
+                  if( write(socketClient, message, taille_msg) <= 0){
+                    perror("reponse vendeur");
+                    break;
+                  }
+                  free(message);
+                }
+                else{
+                  perror("recherche socket\n");
+                  return NULL;
+                }
+              }
+              else{
+                printf("vendeur absent\n");
+              }
+            }
+          }
+          else{
+            if (pseudoMeilleurEnchere == reqVente.id && listeVente->premier->vente.prix == reqVente.prix){
+              reqVente.type_requete = OBJET_INVENDU;
+              taille_msg = sizeof(struct requete_vente);
+              message = (char *) malloc(sizeof(struct requete_vente));
+              memcpy(message, &reqVente, sizeof(struct requete_vente));
+              sendto(sockUDP, message, taille_msg , 0, (struct sockaddr*)&adresseUDP, longueur_adresse);
+              free(message);
+            }
+            else {
+              perror("recherche socket\n");
+              return NULL;
+            }
+          }
+        }
+        else {
+          if (pseudoMeilleurEnchere == reqVente.id && listeVente->premier->vente.prix == reqVente.prix){
+            reqVente.type_requete = OBJET_INVENDU;
+            taille_msg = sizeof(struct requete_vente);
+            message = (char *) malloc(sizeof(struct requete_vente));
+            memcpy(message, &reqVente, sizeof(struct requete_vente));
+            sendto(sockUDP, message, taille_msg , 0, (struct sockaddr*)&adresseUDP, longueur_adresse);
+            free(message);
+          }
+          else {
+            reqVente.type_requete = FIN_VENTE;
+            reqVente.id = pseudoMeilleurEnchere;
+            reqVente.prix = prixMeilleurEnchere;
+            taille_msg = sizeof(struct requete_vente);
+            message = (char *) malloc(sizeof(struct requete_vente));
+            memcpy(message, &reqVente, sizeof(struct requete_vente));
+            sendto(sockUDP, message, taille_msg , 0, (struct sockaddr*)&adresseUDP, longueur_adresse);
+            free(message);
+          }
+          printf("client absent\n");
+        }
+        venteEnCours = 0;
+        pseudoMeilleurEnchere = 0;
+        prixMeilleurEnchere = 0;
+        suppression(listeVente);
+        if (nbElementListe(listeVente) > 0){
+          printf("Nouvelle vente de %d : %s , %d\n", listeVente->premier->vente.id, listeVente->premier->vente.description, listeVente->premier->vente.prix);
+          reqVente.type_requete = NOUVELLE_VENTE;
+          reqVente.id = listeVente->premier->vente.id;
+          strcpy(reqVente.description, listeVente->premier->vente.description);
+          reqVente.prix = listeVente->premier->vente.prix;
+          taille_msg = sizeof(struct requete_vente);
+          message = (char *) malloc(sizeof(struct requete_vente));
+          memcpy(message, &reqVente, sizeof(struct requete_vente));
+          sendto(sockUDP, message, taille_msg , 0, (struct sockaddr*)&adresseUDP, longueur_adresse);
+          free(message);
+          venteEnCours = 1;
+          pseudoMeilleurEnchere = reqVente.id;
+          prixMeilleurEnchere = reqVente.prix;
+        }
+      }
+      else{
+        switch (reqVente.type_requete) {
+          case SURENCHERE:
+            printf("Surenchere de %d : %d €\n", reqVente.id, reqVente.prix);
+            pseudoMeilleurEnchere = reqVente.id;
+            prixMeilleurEnchere = reqVente.prix;
+            break;
+          default:
+            break;
+          }
+        }
+    }
+  }
+  return 0;
+}
+
+static void *connexionClientTcp(void *p_data){
+  int socket_ecoute, socket_service, taille_msg, thread;
+  static struct sockaddr_in addr_client;
+  socket_ecoute =  *((int*)p_data);
+  while(1){
+    pthread_t thread_client;
+    taille_msg = sizeof(struct sockaddr_in);
+    socket_service = accept(socket_ecoute,(struct sockaddr*)&addr_client,(socklen_t *) &taille_msg);
+    thread = pthread_create(&thread_client, NULL, gererClient, &socket_service );
+    if (thread){
+      perror("creation thread client");
+      return NULL;
+    }
+  }
+  return 0;
 }
 
 int main(int argc, char *argv[]){
-  int socket_ecoute, socket_service, taille_msg, pid, socketClient;
-  struct requete_vente venteActuelle;
-  static struct sockaddr_in addr_client;
-  struct requete_vente reqVente;
-  char *message = "";
-  char *nomFichierServeur = NOM_FICHIER;
-  char *fichierClient = NOM_FICHIER_L_CLIENT;
-  char *fichierVente = NOM_FICHIER_L_VENTE;
-  fptr = NULL;
-  if((fptr = fopen(nomFichierServeur, "w+"))==NULL){
-    perror("erreur fichier");
-    return 1;
-  }
-  putw(0, fptr);
-  putw(0, fptr);
-  putw(0, fptr);
-  fclose(fptr);
-  fptr = fopen(fichierVente, "w+");
-  fclose(fptr);
-  fptr = fopen(fichierClient, "w+");
-  fclose(fptr);
+  int socket_ecoute, thread;
+  listeClient = init();
+  listeVente = initialiser();
+  thread = 0;
+  venteEnCours = 0;
+  pseudoMeilleurEnchere = 0;
+  prixMeilleurEnchere = 0;
   socket_ecoute = creerSocketTCP();
   if (socket_ecoute == -1){
     perror("creation socket service");
@@ -271,121 +362,19 @@ int main(int argc, char *argv[]){
     perror("erreur connexion multicast");
     return 1;
   }
-  signal(SIGCHLD, SIG_IGN);
-  pid = fork();
-  switch (pid){
-    case -1 :
-      perror("Impossible de creer le processus fils\n");
+  thread = pthread_create(&thread_UDP, NULL, ecouteGroupeMulticast, NULL);
+  if (!thread){
+    thread = pthread_create(&thread_TCP, NULL, connexionClientTcp, &socket_ecoute );
+    if (thread){
+      perror("creation thread tcp");
       return 1;
-      break;
-    case 0 :
-      while(1){
-        fptr = fopen(nomFichierServeur, "r");
-        if (getw(fptr)){
-          fclose(fptr);
-          if (recv(sockUDP, &reqVente, sizeof(struct requete_vente), 0) == -1){
-            fptr = fopen(nomFichierServeur, "r");
-            getw(fptr);
-            reqVente.type_requete = FIN_VENTE;
-            reqVente.id = getw(fptr);
-            reqVente.prix = getw(fptr);
-            fclose(fptr);
-            taille_msg = sizeof(struct requete_vente);
-            message = (char *) malloc(sizeof(struct requete_vente));
-            memcpy(message, &reqVente, sizeof(struct requete_vente));
-            sendto(sockUDP, message, taille_msg , 0, (struct sockaddr*)&adresseUDP, longueur_adresse);
-            free(message);
-            if ((socketClient = rechercherClient(reqVente.id)) == -1){
-              perror("client absent");
-              return 1;
-            }
-            printf("%d", socketClient);
-            reqVente.type_requete = ACQUEREUR;
-            taille_msg = sizeof(struct requete_vente);
-            message = (char *) malloc(sizeof(struct requete_vente));
-            memcpy(message, &reqVente, sizeof(struct requete_vente));
-            if( write(socketClient, message, taille_msg) <= 0){
-              perror("reponse acquereur");
-              break;
-            }
-            free(message);
-            fptr = fopen(fichierVente, "r");
-            fread(&venteActuelle, sizeof(struct requete_vente), 1, fptr);
-            fclose(fptr);
-            if ((socketClient = rechercherClient(venteActuelle.id)) == -1){
-              perror("client absent");
-              return 1;
-            }
-            reqVente.type_requete = VENDEUR;
-            taille_msg = sizeof(struct requete_vente);
-            message = (char *) malloc(sizeof(struct requete_vente));
-            memcpy(message, &reqVente, sizeof(struct requete_vente));
-            if( write(socketClient, message, taille_msg) <= 0){
-              perror("reponse vendeur");
-              break;
-            }
-            free(message);
-            fptr = fopen(nomFichierServeur, "w+");
-            putw(0, fptr);
-            putw(0, fptr);
-            putw(0, fptr);
-            fclose(fptr);
-            supprimerPremiereVente();
-            fptr = fopen(NOM_FICHIER_L_VENTE, "r");
-            fseek(fptr, 0, SEEK_END);
-            if (ftell(fptr) != 0){
-              rewind(fptr);
-              fread(&venteActuelle, sizeof(struct requete_vente), 1, fptr);
-              fclose(fptr);
-              reqVente.type_requete = NOUVELLE_VENTE;
-              reqVente.id = venteActuelle.id;
-              strcpy(reqVente.description, venteActuelle.description);
-              reqVente.prix = venteActuelle.prix;
-              taille_msg = sizeof(struct requete_vente);
-              message = (char *) malloc(sizeof(struct requete_vente));
-              memcpy(message, &reqVente, sizeof(struct requete_vente));
-              sendto(sockUDP, message, taille_msg , 0, (struct sockaddr*)&adresseUDP, longueur_adresse);
-              free(message);
-              fptr = fopen(nomFichierServeur, "w+");
-              putw(1, fptr);
-              putw(0, fptr);
-              putw(0, fptr);
-              fclose(fptr);
-            }
-          }
-          else{
-            switch (reqVente.type_requete) {
-              case SURENCHERE:
-                printf("Surenchere de %d : %d €\n", reqVente.id, reqVente.prix);
-                fptr = fopen(nomFichierServeur, "w+");
-                putw(1, fptr);
-                putw(reqVente.id, fptr);
-                putw(reqVente.prix, fptr);
-                fclose(fptr);
-                break;
-              default:
-                break;
-              }
-          }
-        }
-        else {
-          fclose(fptr);
-        }
-      }
-      break;
-    default :
-      while(1){
-        taille_msg = sizeof(struct sockaddr_in);
-        socket_service = accept(socket_ecoute,(struct sockaddr*)&addr_client,(socklen_t *) &taille_msg);
-        if (fork()==0){
-          close(socket_ecoute);
-          gererClient(socket_service);
-          close(socket_service);
-          exit(0);
-        }
-        close(socket_service);
-      }
-      break;
+    }
   }
+  else {
+    perror("creation thread udp");
+    return 1;
+  }
+  pthread_join(thread_UDP, NULL);
+  pthread_join(thread_TCP, NULL);
   return 0;
 }
