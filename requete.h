@@ -2,8 +2,7 @@
 #define REQUETE_H
 
 enum requete_t {
-    FIN = 0,
-    CONNEXION_TCP,
+    CONNEXION_TCP=1,
     REQUETE_VENTE,
     NOUVELLE_VENTE,
     SURENCHERE,

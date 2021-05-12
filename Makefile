@@ -9,9 +9,9 @@ RM= rm -fv
 all: commissaire client
 %.o: %.c %.h
 	$(CC) $(CFLAGS) -c -o $@ $<
-client: client.c
+client: client.c common.o
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBRARY)
-commissaire: serveur.c listeVente.o listeClient.o
+commissaire: serveur.c listeVente.o listeClient.o common.o
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBRARY)
 
 clean:
