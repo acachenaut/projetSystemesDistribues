@@ -72,6 +72,7 @@ char *connexion_tcp(int pseudo) {
         free(message);
         return NULL;
     }
+    printf("Lecture faite\n");
     if (read(sockTCP, (char *) reponse, TAILLEBUF) <= 0) {
         free(message);
         return NULL;

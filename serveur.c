@@ -43,7 +43,7 @@ void reqObjetInvendu(struct requete_vente *reqVente, int type, int socketClient)
     reqVente->type_requete = OBJET_INVENDU;
     taille_msg = sizeof(struct requete_vente);
     message = (char *) malloc(sizeof(struct requete_vente));
-    memcpy(message, &reqVente, sizeof(struct requete_vente));
+    memcpy(message, reqVente, sizeof(struct requete_vente));
     sendto(sockUDP, message, taille_msg, 0, (struct sockaddr *) &adresseUDP, longueur_adresse);
     switch(type){
         case 1:
@@ -66,7 +66,7 @@ void reqFinVente(struct requete_vente *reqVente){
     reqVente->prix = prixMeilleurEnchere;
     taille_msg = sizeof(struct requete_vente);
     message = (char *) malloc(sizeof(struct requete_vente));
-    memcpy(message, &reqVente, sizeof(struct requete_vente));
+    memcpy(message, reqVente, sizeof(struct requete_vente));
     sendto(sockUDP, message, taille_msg, 0, (struct sockaddr *) &adresseUDP, longueur_adresse);
     free(message);
 }
@@ -77,7 +77,7 @@ void reqAcquereur(struct requete_vente *reqVente, int socketClient){
     reqVente->type_requete = ACQUEREUR;
     taille_msg = sizeof(struct requete_vente);
     message = (char *) malloc(sizeof(struct requete_vente));
-    memcpy(message, &reqVente, sizeof(struct requete_vente));
+    memcpy(message, reqVente, sizeof(struct requete_vente));
     if (write(socketClient, message, taille_msg) <= 0) {
         perror("reponse acquereur");
     }
@@ -90,7 +90,7 @@ void reqVendeur(struct requete_vente *reqVente, int socketClient){
     reqVente->type_requete = VENDEUR;
     taille_msg = sizeof(struct requete_vente);
     message = (char *) malloc(sizeof(struct requete_vente));
-    memcpy(message, &reqVente, sizeof(struct requete_vente));
+    memcpy(message, reqVente, sizeof(struct requete_vente));
     if (write(socketClient, message, taille_msg) <= 0) {
         perror("reponse vendeur");
     }
@@ -100,7 +100,7 @@ void reqVendeur(struct requete_vente *reqVente, int socketClient){
 void reqRequeteVente(struct requete_vente *reqVente, int sock_client){
     reqVente->type_requete = REQUETE_VENTE;
     reqVente->id = 0;
-    if (write(sock_client, &reqVente, sizeof(struct requete_vente)) <= 0) {
+    if (write(sock_client, reqVente, sizeof(struct requete_vente)) <= 0) {
         perror("envoi réponse\n");
     }
 }
@@ -114,7 +114,7 @@ void reqNouvelleVente(struct requete_vente *reqVente){
     reqVente->prix = listeVente->premier->vente.prix;
     taille_msg = sizeof(struct requete_vente);
     message = (char *) malloc(sizeof(struct requete_vente));
-    memcpy(message, &reqVente, sizeof(struct requete_vente));
+    memcpy(message, reqVente, sizeof(struct requete_vente));
     sendto(sockUDP, message, taille_msg, 0, (struct sockaddr *) &adresseUDP, longueur_adresse);
     free(message);
 }
